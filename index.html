@@ -12,7 +12,7 @@
     
     <!-- PDF.js Engine (Client-side Page 1 Rendering) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <!-- MIDI Parser Engine -->
+    <!-- MIDI Parser Engine (Fallback) -->
     <script src="https://cdn.jsdelivr.net/npm/@tonejs/midi"></script>
     
     <!-- WebAudioFont Core Engine -->
@@ -130,7 +130,7 @@
                     </div>
 
                     <!-- Sampled Instrument Audio Box -->
-                    <div class="audio-player-box" id="audioPlayerBox">
+                    <div class="audio-player-box">
                         <div class="audio-ui">
                             <button id="playAudioBtn" class="play-btn" aria-label="Play Sample Preview">
                                 <span id="playIcon">▶</span>
@@ -152,7 +152,7 @@
                             <input type="radio" name="editionOption" value="both" checked>
                             <div class="option-content">
                                 <span class="option-title">Concert Bundle (Piano + Guitar)</span>
-                                <span class="option-desc">Complete PDF scores, MIDI & XML files for both</span>
+                                <span class="option-desc">All PDF, MIDI & XML files for both instruments</span>
                             </div>
                             <span class="option-price">RM 10</span>
                         </label>
