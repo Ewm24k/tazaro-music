@@ -3,27 +3,21 @@
  * TAZARO MUSIC SHEET — CORE PLATFORM ENGINE
  * =======================================================================
  * Features:
- * 1. Intelligent Asymmetric Upload Handling:
- *    - Automatically detects when a piece is Piano-only, Guitar-only, or Both.
- *    - Tags cards with clear badges (e.g., "Guitar Exclusive", "Piano N/A").
- *    - Auto-locks and crosses out missing tabs inside the preview modal.
- *    - Dynamically updates RM 10 Bundle / RM 5 Solo pricing so users only buy valid files.
+ * 1. Native Client-Side MusicXML Arrangement Parser:
+ *    - Parses structured, quantized MusicXML notes directly via DOMParser.
+ *    - Accurately tracks <divisions>, multi-voice <backup>/<forward>,
+ *      chords, and tempo markings (<sound tempo="BPM"/>).
+ *    - Pure quantized rhythm matching the original score arrangement.
+ *    - Automatic fallback to .mid if a piece doesn't have .musicxml.
  * 2. Authentic Dual Instrument Soundbanks:
  *    - Piano: Real Yamaha/Steinway Concert Grand (_tone_0000_JCLive_sf2_file)
  *    - Guitar: Real Steel-String Acoustic Guitar (_tone_0250_JCLive_sf2_file)
  *              with Nylon backup (_tone_0240_JCLive_sf2_file) + Zero-Wait Pluck Fallback
- * 3. Retina High-DPI Page-1 PDF Rendering Sandbox (PDF.js)
- * 4. Reactive Search & Category Chip Filter
- * 5. ToyyibPay Secure API Payment Bridge Hook
- * 6. Netlify Watermark DOM Killer
- *
- * AUDIO ENGINE ARCHITECTURE (FIXED LIFETIME VOICE COUNTER):
- * - Fixed the bug where playback cut out after a few seconds. The polyphony
- *   limiter now operates per concurrent time-slice (max overlapping notes
- *   at once) instead of a lifetime counter that killed the track after 28 notes.
- * - Master compressor/limiter bus prevents chord clipping on phone speakers.
- * - Direct AudioContext clock scheduling (no drifting setTimeout).
- * - Visibilitychange listener auto-resumes audio if mobile screen locks or tabs swap.
+ * 3. Master Limiter/Compressor Bus to prevent speaker clipping on dense chords
+ * 4. Retina High-DPI Page-1 PDF Rendering Sandbox (PDF.js)
+ * 5. Reactive Search & Category Chip Filter
+ * 6. ToyyibPay Secure API Payment Bridge Hook
+ * 7. Netlify Watermark DOM Killer
  * =======================================================================
  */
 
@@ -48,8 +42,7 @@ let playbackTimer = null;
 let playbackStartTime = 0;
 let currentTrackDuration = 0;
 
-// Maximum simultaneous notes permitted at the exact same moment (prevents
-// clipping and mobile audio thread choking while letting the song play continuously).
+// Maximum simultaneous notes per narrow chord window
 const MAX_CONCURRENT_NOTES_PER_CHORD = 8;
 
 /* =======================================================================
@@ -61,7 +54,7 @@ function getAudioContext() {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         audioCtx = new AudioContextClass({ latencyHint: 'interactive' });
 
-        // Master compressor/limiter bus: protects against speaker crackle on dense chords
+        // Master compressor/limiter bus
         const compressor = audioCtx.createDynamicsCompressor();
         compressor.threshold.setValueAtTime(-6, audioCtx.currentTime);
         compressor.knee.setValueAtTime(12, audioCtx.currentTime);
@@ -86,7 +79,6 @@ function getAudioContext() {
     return audioCtx;
 }
 
-// Auto-resume audio when returning from mobile background/lock screen
 document.addEventListener('visibilitychange', () => {
     if (!document.hidden && audioCtx && audioCtx.state === 'suspended') {
         audioCtx.resume();
@@ -97,7 +89,6 @@ function getInstrumentPreset(type) {
     if (type === 'piano') {
         return window._tone_0000_JCLive_sf2_file || null;
     }
-    // Real Steel-string acoustic first, with Nylon as secondary backup
     return window._tone_0250_JCLive_sf2_file || window._tone_0240_JCLive_sf2_file || null;
 }
 
@@ -107,22 +98,6 @@ function primeInstrument(type) {
     if (soundFontPlayer && preset) {
         soundFontPlayer.adjustPreset(ctx, preset);
     }
-}
-
-function noteNameToMidi(noteName) {
-    const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    const regex = /^([A-G][#b]?)(-?\d+)$/;
-    const match = noteName.match(regex);
-    if (!match) return 60;
-
-    let note = match[1];
-    const octave = parseInt(match[2], 10);
-    const flatMap = { 'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#' };
-    if (flatMap[note]) note = flatMap[note];
-
-    const noteIndex = notes.indexOf(note);
-    if (noteIndex === -1) return 60;
-    return noteIndex + (octave + 1) * 12;
 }
 
 function playFallbackGuitarString(ctx, midiNote, when, duration, velocity = 0.8) {
@@ -178,7 +153,121 @@ function playFallbackGuitarString(ctx, midiNote, when, duration, velocity = 0.8)
 }
 
 /* =======================================================================
- * 2. ANIMATED HERO KEYWORD CAROUSEL
+ * 2. CLIENT-SIDE MUSICXML NOTE PARSER
+ * ======================================================================= */
+
+/**
+ * Parses raw MusicXML score data into quantized notes with exact timing,
+ * handling measures, BPM tempo changes, staves, and multi-voice backups.
+ */
+function parseMusicXMLToNotes(xmlString) {
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+
+    const stepOffsets = { 'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11 };
+    let divisions = 1; // Default quarter-note divisions
+    let currentBpm = 120; // Default tempo
+    let globalTimeInSeconds = 0;
+
+    const parsedNotes = [];
+    const measures = xmlDoc.querySelectorAll('measure');
+
+    measures.forEach(measure => {
+        // 1. Check for Tempo changes (<sound tempo="..."/> or <metronome>)
+        const soundTag = measure.querySelector('direction sound[tempo]');
+        if (soundTag) {
+            const newBpm = parseFloat(soundTag.getAttribute('tempo'));
+            if (!isNaN(newBpm) && newBpm > 20) currentBpm = newBpm;
+        }
+
+        // 2. Check for Division definition (<divisions>N</divisions>)
+        const divTag = measure.querySelector('attributes divisions');
+        if (divTag) {
+            const newDiv = parseInt(divTag.textContent, 10);
+            if (!isNaN(newDiv) && newDiv > 0) divisions = newDiv;
+        }
+
+        const secondsPerDivision = (60 / currentBpm) / divisions;
+
+        let measureCursorDivisions = 0;
+        let maxMeasureDivisions = 0;
+        let lastNoteStartDivisions = 0;
+
+        // Iterate through measure elements in exact sequence
+        const children = measure.children;
+        for (let i = 0; i < children.length; i++) {
+            const el = children[i];
+            const tagName = el.tagName.toLowerCase();
+
+            if (tagName === 'note') {
+                const isRest = el.querySelector('rest') !== null;
+                const isChord = el.querySelector('chord') !== null;
+                const durTag = el.querySelector('duration');
+                const noteDivisions = durTag ? parseInt(durTag.textContent, 10) : 0;
+
+                let noteStartDivision = 0;
+
+                if (isChord) {
+                    // Chords start at the exact same time as the preceding note
+                    noteStartDivision = lastNoteStartDivisions;
+                } else {
+                    noteStartDivision = measureCursorDivisions;
+                    lastNoteStartDivisions = measureCursorDivisions;
+                    measureCursorDivisions += noteDivisions;
+                    if (measureCursorDivisions > maxMeasureDivisions) {
+                        maxMeasureDivisions = measureCursorDivisions;
+                    }
+                }
+
+                if (!isRest) {
+                    const pitch = el.querySelector('pitch');
+                    if (pitch) {
+                        const step = pitch.querySelector('step')?.textContent || 'C';
+                        const alter = parseInt(pitch.querySelector('alter')?.textContent || '0', 10);
+                        const octave = parseInt(pitch.querySelector('octave')?.textContent || '4', 10);
+
+                        const midi = (octave + 1) * 12 + (stepOffsets[step] || 0) + alter;
+                        const startTime = globalTimeInSeconds + (noteStartDivision * secondsPerDivision);
+                        const durationSeconds = Math.max(noteDivisions * secondsPerDivision, 0.25);
+
+                        parsedNotes.push({
+                            midi: midi,
+                            time: startTime,
+                            duration: durationSeconds,
+                            velocity: 0.85
+                        });
+                    }
+                }
+            } else if (tagName === 'backup') {
+                // Multi-voice rewinding (e.g. Left Hand or Bass voice in same measure)
+                const durTag = el.querySelector('duration');
+                const backupDiv = durTag ? parseInt(durTag.textContent, 10) : 0;
+                measureCursorDivisions = Math.max(0, measureCursorDivisions - backupDiv);
+            } else if (tagName === 'forward') {
+                const durTag = el.querySelector('duration');
+                const fwdDiv = durTag ? parseInt(durTag.textContent, 10) : 0;
+                measureCursorDivisions += fwdDiv;
+                if (measureCursorDivisions > maxMeasureDivisions) {
+                    maxMeasureDivisions = measureCursorDivisions;
+                }
+            }
+        }
+
+        // Advance global song time by the total length of this measure
+        globalTimeInSeconds += (maxMeasureDivisions * secondsPerDivision);
+    });
+
+    // Sort notes by exact start time
+    parsedNotes.sort((a, b) => a.time - b.time);
+
+    return {
+        notes: parsedNotes,
+        duration: globalTimeInSeconds
+    };
+}
+
+/* =======================================================================
+ * 3. ANIMATED HERO KEYWORD CAROUSEL
  * ======================================================================= */
 
 const audienceKeywords = [
@@ -208,7 +297,7 @@ function initHeaderCarousel() {
 }
 
 /* =======================================================================
- * 3. DYNAMIC INVENTORY FETCHING & GROUPING
+ * 4. DYNAMIC INVENTORY FETCHING & GROUPING
  * ======================================================================= */
 
 function generateSlug(filename) {
@@ -305,7 +394,7 @@ function processDiscoveredFiles(filePaths) {
 }
 
 /* =======================================================================
- * 4. SEARCH & GALLERY FILTER ENGINE
+ * 5. SEARCH & GALLERY FILTER ENGINE
  * ======================================================================= */
 
 function updateFilterCounts(items) {
@@ -377,7 +466,7 @@ document.getElementById('resetFilterBtn').addEventListener('click', () => {
 });
 
 /* =======================================================================
- * 5. CATALOG GRID RENDERER (CASES A, B, and C)
+ * 6. CATALOG GRID RENDERER (CASES A, B, and C)
  * ======================================================================= */
 
 function renderCatalog(items) {
@@ -454,7 +543,7 @@ function renderCatalog(items) {
 }
 
 /* =======================================================================
- * 6. RETINA HIGH-DPI PAGE-1 PDF PREVIEW ENGINE
+ * 7. RETINA HIGH-DPI PAGE-1 PDF PREVIEW ENGINE
  * ======================================================================= */
 
 async function renderSecureFirstPage(pdfUrl) {
@@ -517,7 +606,7 @@ async function renderSecureFirstPage(pdfUrl) {
 }
 
 /* =======================================================================
- * 7. AUTHENTIC AUDIO CONTROLLER (FULL CONTINUOUS PLAYBACK)
+ * 8. AUTHENTIC AUDIO CONTROLLER (MUSICXML PRIMARY + MIDI FALLBACK)
  * ======================================================================= */
 
 const playBtn = document.getElementById('playAudioBtn');
@@ -561,8 +650,69 @@ async function toggleAudioPlayback() {
     if (!hasCurrentInstrument) return;
 
     const preset = getInstrumentPreset(activeInstrument);
+    const currentXmlFile = currentSong?.instruments?.[activeInstrument]?.musicxml;
     const currentMidiFile = currentSong?.instruments?.[activeInstrument]?.mid;
 
+    // ==============================================================
+    // PATH 1: PLAY DIRECTLY FROM MUSICXML (QUANTIZED & STRUCTURED)
+    // ==============================================================
+    if (currentXmlFile) {
+        try {
+            audioStatus.textContent = "Loading Quantized MusicXML Score...";
+            const response = await fetch(currentXmlFile);
+            if (response.ok) {
+                const xmlText = await response.text();
+                const parsedScore = parseMusicXMLToNotes(xmlText);
+
+                if (parsedScore.notes.length > 0) {
+                    stopAudioPlayback(false);
+                    isPlaying = true;
+                    updateAudioStatusLabel();
+
+                    const now = ctx.currentTime + 0.08;
+                    playbackStartTime = now;
+                    currentTrackDuration = Math.min(parsedScore.duration || 30, 45); // 45s preview
+
+                    const timeSlotCounter = {};
+
+                    parsedScore.notes.forEach(note => {
+                        if (note.time < 45) {
+                            const slotKey = Math.round(note.time * 20);
+                            timeSlotCounter[slotKey] = (timeSlotCounter[slotKey] || 0) + 1;
+                            if (timeSlotCounter[slotKey] > MAX_CONCURRENT_NOTES_PER_CHORD) return;
+
+                            const when = now + note.time;
+                            const duration = Math.max(note.duration, 0.35);
+                            const volume = note.velocity * 0.95;
+
+                            if (preset && soundFontPlayer) {
+                                soundFontPlayer.queueWaveTable(
+                                    ctx,
+                                    ctx.masterBus || ctx.destination,
+                                    preset,
+                                    when,
+                                    note.midi,
+                                    duration,
+                                    volume
+                                );
+                            } else if (isPlaying) {
+                                playFallbackGuitarString(ctx, note.midi, when, duration, volume);
+                            }
+                        }
+                    });
+
+                    startProgressTracker();
+                    return;
+                }
+            }
+        } catch (e) {
+            console.warn('MusicXML parser falling back to MIDI:', e);
+        }
+    }
+
+    // ==============================================================
+    // PATH 2: FALLBACK TO MIDI FILE (IF NO MUSICXML)
+    // ==============================================================
     if (currentMidiFile && window.Midi) {
         try {
             audioStatus.textContent = "Loading Score MIDI...";
@@ -577,21 +727,16 @@ async function toggleAudioPlayback() {
 
                 const now = ctx.currentTime + 0.08;
                 playbackStartTime = now;
-                currentTrackDuration = Math.min(midi.duration || 30, 45); // 45s continuous preview
+                currentTrackDuration = Math.min(midi.duration || 30, 45);
 
-                // True concurrent polyphony tracker: counts notes per narrow time window
-                // instead of an accumulated total that cuts off the song after a few seconds.
                 const timeSlotCounter = {};
 
                 midi.tracks.forEach(track => {
                     track.notes.forEach(note => {
                         if (note.time < 45) {
-                            // Group notes by 50ms time-slices to limit excessive chords
                             const slotKey = Math.round(note.time * 20);
                             timeSlotCounter[slotKey] = (timeSlotCounter[slotKey] || 0) + 1;
-                            if (timeSlotCounter[slotKey] > MAX_CONCURRENT_NOTES_PER_CHORD) {
-                                return; // caps concurrent voice density without killing the song
-                            }
+                            if (timeSlotCounter[slotKey] > MAX_CONCURRENT_NOTES_PER_CHORD) return;
 
                             const when = now + note.time;
                             const duration = Math.max(note.duration, 0.4);
@@ -618,11 +763,13 @@ async function toggleAudioPlayback() {
                 return;
             }
         } catch (e) {
-            console.warn('MIDI direct stream fallback triggered:', e);
+            console.warn('MIDI stream fallback triggered:', e);
         }
     }
 
-    // Demo Progression Fallback
+    // ==============================================================
+    // PATH 3: DEMO PROGRESSION FALLBACK (GUARANTEES INSTANT SOUND)
+    // ==============================================================
     stopAudioPlayback(false);
     isPlaying = true;
     updateAudioStatusLabel();
@@ -729,7 +876,7 @@ function startProgressTracker() {
 playBtn.addEventListener('click', toggleAudioPlayback);
 
 /* =======================================================================
- * 8. MODAL MANAGEMENT & ASYMMETRIC UI HANDLER
+ * 9. MODAL MANAGEMENT & ASYMMETRIC UI HANDLER
  * ======================================================================= */
 
 const modal = document.getElementById('previewModal');
@@ -846,7 +993,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 /* =======================================================================
- * 9. COMMERCE & TOYYIBPAY INTEGRATION
+ * 10. COMMERCE & TOYYIBPAY INTEGRATION
  * ======================================================================= */
 
 const priceOptions = document.querySelectorAll('.price-option');
@@ -909,7 +1056,7 @@ function initiateToyyibpayCheckout({ songSlug, title, bundleType, amountRM }) {
 }
 
 /* =======================================================================
- * 10. NETLIFY WATERMARK DOM REMOVER
+ * 11. NETLIFY WATERMARK DOM REMOVER
  * ======================================================================= */
 
 const purgeNetlifyBadges = () => {
@@ -925,7 +1072,7 @@ const badgeObserver = new MutationObserver(purgeNetlifyBadges);
 badgeObserver.observe(document.body, { childList: true, subtree: true });
 
 /* =======================================================================
- * 11. BOOT INITIALIZATION
+ * 12. BOOT INITIALIZATION
  * ======================================================================= */
 
 document.addEventListener('DOMContentLoaded', () => {
