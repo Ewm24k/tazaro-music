@@ -14,8 +14,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <!-- MIDI Parser Engine -->
     <script src="https://cdn.jsdelivr.net/npm/@tonejs/midi"></script>
-    <!-- Soundfont HD Audio Engine (Steinway Grand & Nylon Guitar) -->
-    <script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.min.js"></script>
     
     <link rel="stylesheet" href="style.css">
 </head>
@@ -92,7 +90,7 @@
         </div>
     </main>
 
-    <!-- MODAL: Sheet Inspection, Retina Page-1 Preview & HD Audio Engine -->
+    <!-- MODAL: Sheet Inspection, Retina Page-1 Preview & Native Audio Engine -->
     <div class="modal-overlay" id="previewModal">
         <div class="modal-card">
             <button class="modal-close" id="modalCloseBtn" aria-label="Close Preview">&times;</button>
@@ -114,7 +112,7 @@
                     </div>
                 </div>
 
-                <!-- Right: Details, Synthesis Audio Player & Pricing Selector -->
+                <!-- Right: Details, Native Audio Player & Pricing Selector -->
                 <div class="sheet-details">
                     <div class="details-header">
                         <span class="genre-tag" id="previewGenre">Verified Concert Archive</span>
@@ -122,16 +120,14 @@
                         <p class="format-chips">Included: <span>.PDF</span> <span>.MusicXML</span> <span>.MID</span></p>
                     </div>
 
-                    <!-- HD Audio Player Box with Smart Loading States -->
+                    <!-- Native Instant Audio Player Box -->
                     <div class="audio-player-box">
                         <div class="audio-ui">
-                            <button id="playAudioBtn" class="play-btn" aria-label="Play Sample Preview" disabled>
-                                <span id="playIcon">
-                                    <span class="audio-spinner"></span>
-                                </span>
+                            <button id="playAudioBtn" class="play-btn" aria-label="Play Sample Preview">
+                                <span id="playIcon">▶</span>
                             </button>
                             <div class="audio-track-info">
-                                <span class="audio-status" id="audioStatus">Buffering HD Concert Audio...</span>
+                                <span class="audio-status" id="audioStatus">Concert Grand Piano HD • Tap to Play</span>
                                 <div class="audio-progress-bar">
                                     <div class="audio-progress-fill" id="audioProgress"></div>
                                 </div>
