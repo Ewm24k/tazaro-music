@@ -8,7 +8,7 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- PDF.js Engine (Client-side Page 1 Rendering) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -32,27 +32,60 @@
         </div>
     </header>
 
-    <!-- Hero Showcase Section -->
+    <!-- Animated Hero Showcase Section -->
     <section class="hero">
         <div class="hero-content">
-            <p class="eyebrow">CONCERT-GRADE TRANSCRIPTIONS</p>
-            <h1>Every Nuance. Fully Preserved.</h1>
-            <p class="hero-desc">Direct access to professional-grade notation, tablatures, and companion MIDI/MusicXML files for Piano and Classical/Acoustic Guitar.</p>
+            <div class="eyebrow-container">
+                <span class="eyebrow-dot"></span>
+                <p class="eyebrow">CONCERT-GRADE TRANSCRIPTIONS</p>
+            </div>
+            
+            <h1 class="shimmer-title">Every Nuance.<br><span class="gradient-text">Fully Preserved.</span></h1>
+            
+            <div class="carousel-container">
+                <span class="carousel-static">Crafted for</span>
+                <span class="carousel-dynamic" id="carouselText">Virtuoso Pianists</span>
+            </div>
+
+            <p class="hero-desc">Direct access to professional notation, authentic tablatures, and companion MIDI/MusicXML files for concert study and performance.</p>
         </div>
     </section>
 
-    <!-- Main Music Catalog -->
+    <!-- Gallery & Catalog Showcase -->
     <main class="catalog-wrapper">
-        <div class="catalog-controls">
-            <h2>Available Masterpieces</h2>
-            <div class="filter-indicators">
-                <span>Auto-grouped from: <code>/sheet/piano</code> & <code>/sheet/guitar</code></span>
+        
+        <!-- Gallery Navigation & Instant Filter Bar -->
+        <div class="gallery-toolbar">
+            <div class="search-box">
+                <span class="search-icon">⚲</span>
+                <input type="text" id="searchInput" placeholder="Search piece, composer, or title..." autocomplete="off">
+                <button id="searchClear" class="search-clear" style="display:none;">&times;</button>
+            </div>
+
+            <div class="filter-chips">
+                <button class="chip active" data-filter="all">All Scores <span class="chip-count" id="countAll">0</span></button>
+                <button class="chip" data-filter="piano">Piano Solo <span class="chip-count" id="countPiano">0</span></button>
+                <button class="chip" data-filter="guitar">Guitar Tabs <span class="chip-count" id="countGuitar">0</span></button>
+                <button class="chip" data-filter="both">Bundle Deals <span class="chip-count" id="countBoth">0</span></button>
             </div>
         </div>
 
-        <!-- Song Cards Grid Container -->
+        <div class="catalog-meta-bar">
+            <span class="catalog-status" id="catalogResultsCount">Loading archive...</span>
+            <span class="catalog-path-indicator">Sync: <code>/sheet/piano</code> & <code>/sheet/guitar</code></span>
+        </div>
+
+        <!-- Dynamic Grid Container -->
         <div class="song-grid" id="songGrid">
-            <!-- Dynamically populated via app.js -->
+            <!-- Populated dynamically via app.js -->
+        </div>
+
+        <!-- No Results Fallback View -->
+        <div class="empty-state" id="emptyState" style="display: none;">
+            <div class="empty-icon">𝄞</div>
+            <h3>No Masterpieces Found</h3>
+            <p>No sheet music matches your search criteria. Try a different title or reset filters.</p>
+            <button class="reset-filter-btn" id="resetFilterBtn">Reset Search</button>
         </div>
     </main>
 
@@ -81,7 +114,7 @@
                 <!-- Right: Details, Synthesis Audio Player & Pricing Selector -->
                 <div class="sheet-details">
                     <div class="details-header">
-                        <span class="genre-tag" id="previewGenre">Verified Archive</span>
+                        <span class="genre-tag" id="previewGenre">Verified Concert Archive</span>
                         <h3 id="previewTitle">Song Title</h3>
                         <p class="format-chips">Included: <span>.PDF</span> <span>.MusicXML</span> <span>.MID</span></p>
                     </div>
