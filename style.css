@@ -315,7 +315,7 @@ body {
 
 /* ==========================================================
    DYNAMIC MUSIC CARDS
-   ========================================================== */
+   ========================================================= */
 .song-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
@@ -748,7 +748,6 @@ body {
 
 /* ==========================================================
    MOBILE DESIGN: IOS & ANDROID (SCREEN <= 768px)
-   FIXES OFFSET SEARCH BAR & TAG TABS
    ========================================================== */
 @media (max-width: 768px) {
     .navbar {
@@ -764,7 +763,6 @@ body {
         padding: 0.5rem 1rem 6rem;
     }
 
-    /* Redesigned Clean App Toolbar for Mobile */
     .gallery-toolbar {
         background: transparent;
         border: none;
@@ -776,7 +774,6 @@ body {
         gap: 0.85rem;
     }
 
-    /* 100% Edge-Aligned Search Bar */
     .search-box {
         flex: 0 0 auto;
         width: 100%;
@@ -786,7 +783,7 @@ body {
         background: var(--bg-surface-elevated);
         border: 1px solid rgba(255, 255, 255, 0.12);
         padding: 0.85rem 2.6rem 0.85rem 2.75rem;
-        font-size: 16px; /* Prevents iOS Safari from auto-zooming on tap */
+        font-size: 16px; /* Stops iOS Safari auto-zoom */
         border-radius: var(--radius-md);
     }
     .search-icon {
@@ -798,11 +795,10 @@ body {
         padding: 6px;
     }
 
-    /* Edge-to-Edge Swipeable Tag Rail */
     .filter-chips-wrapper {
         width: 100%;
         overflow: hidden;
-        margin: 0 -1rem; /* Pulls to screen edge */
+        margin: 0 -1rem;
         padding: 0 1rem;
     }
     .filter-chips {
@@ -819,7 +815,6 @@ body {
         font-size: 0.82rem;
     }
 
-    /* Aligned Meta Bar */
     .catalog-meta-bar {
         flex-direction: row;
         font-size: 0.75rem;
@@ -827,10 +822,9 @@ body {
         padding: 0;
     }
     .catalog-path-indicator {
-        display: none; /* Cleaner look on mobile */
+        display: none;
     }
 
-    /* Full-Screen Native App Modal */
     .modal-overlay {
         padding: 0;
         align-items: flex-end;
@@ -877,7 +871,6 @@ body {
         font-size: 1.4rem;
     }
 
-    /* Floating Docked Checkout on Mobile Devices */
     .checkout-selector {
         margin-top: 0.75rem;
     }
@@ -899,7 +892,7 @@ body {
 }
 
 /* ==========================================================
-   NETLIFY WATERMARK OBLITERATOR (CSS OVERRIDE)
+   NETLIFY WATERMARK OBLITERATOR
    ========================================================== */
 a[href*="netlify.com"],
 div:has(a[href*="netlify.com"]),
