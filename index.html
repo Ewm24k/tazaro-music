@@ -114,9 +114,9 @@
 
                     <div class="canvas-viewport">
                         <canvas id="sheetCanvas"></canvas>
-                        <div class="watermark-layer">
+                        <div class="watermark-layer" id="watermarkLayer">
                             <span>TAZARO PREVIEW ONLY</span>
-                            <small>Page 1 of Complete Score</small>
+                            <small id="watermarkSubtitle">Page 1 of Complete Score</small>
                         </div>
                     </div>
                 </div>
@@ -126,11 +126,11 @@
                     <div class="details-header">
                         <span class="genre-tag" id="previewGenre">Verified Concert Archive</span>
                         <h3 id="previewTitle">Song Title</h3>
-                        <p class="format-chips">Included: <span>.PDF</span> <span>.MusicXML</span> <span>.MID</span></p>
+                        <p class="format-chips" id="previewFormats">Included: <span>.PDF</span> <span>.MusicXML</span> <span>.MID</span></p>
                     </div>
 
                     <!-- Sampled Instrument Audio Box -->
-                    <div class="audio-player-box">
+                    <div class="audio-player-box" id="audioPlayerBox">
                         <div class="audio-ui">
                             <button id="playAudioBtn" class="play-btn" aria-label="Play Sample Preview">
                                 <span id="playIcon">▶</span>
@@ -148,16 +148,16 @@
                     <div class="checkout-selector">
                         <h4>Select Acquisition Option</h4>
 
-                        <label class="price-option selected" data-bundle="both" data-price="10.00">
+                        <label class="price-option selected" data-bundle="both" data-price="10.00" id="optBundle">
                             <input type="radio" name="editionOption" value="both" checked>
                             <div class="option-content">
                                 <span class="option-title">Concert Bundle (Piano + Guitar)</span>
-                                <span class="option-desc">All PDF, MIDI & XML files for both instruments</span>
+                                <span class="option-desc">Complete PDF scores, MIDI & XML files for both</span>
                             </div>
                             <span class="option-price">RM 10</span>
                         </label>
 
-                        <label class="price-option" data-bundle="piano" data-price="5.00">
+                        <label class="price-option" data-bundle="piano" data-price="5.00" id="optPiano">
                             <input type="radio" name="editionOption" value="piano">
                             <div class="option-content">
                                 <span class="option-title">Piano Edition Solo</span>
@@ -166,7 +166,7 @@
                             <span class="option-price">RM 5</span>
                         </label>
 
-                        <label class="price-option" data-bundle="guitar" data-price="5.00">
+                        <label class="price-option" data-bundle="guitar" data-price="5.00" id="optGuitar">
                             <input type="radio" name="editionOption" value="guitar">
                             <div class="option-content">
                                 <span class="option-title">Guitar Edition Solo</span>
