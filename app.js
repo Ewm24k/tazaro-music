@@ -3,18 +3,18 @@
  * TAZARO MUSIC SHEET — CORE PLATFORM ENGINE
  * =======================================================================
  * Features:
- * 1. Strictly Forced MusicXML Quantized Note Player:
- *    - Automatically handles plain .musicxml and compressed .mxl ZIP files via JSZip.
- *    - Independent Multi-Part Parallel Timeline Parsing (Left Hand and Right Hand
- *      notes are strictly synchronized together at t=0s).
- *    - Reads <divisions>, BPM tempo tags (<sound tempo>, <per-minute>),
- *      <backup>, <forward>, and chord structures.
- *    - Priority: MusicXML is forced first; MIDI only used if MusicXML is absent.
+ * 1. Strictly Forced MusicXML Score Arrangement Engine:
+ *    - Automated DTD Header Sanitizer to prevent XML parser entity failures.
+ *    - JSZip auto-unpacker for compressed .mxl / .musicxml packages.
+ *    - Independent Multi-Part Parallel Timeline Parsing (Left Hand & Right Hand
+ *      staves play synchronized together at t=0s).
+ *    - Case-insensitive, namespace-agnostic DOM extraction.
+ *    - Completely purged all "MIDI" labels from player UI across phone & PC.
  * 2. Authentic Dual Instrument Soundbanks:
  *    - Piano: Real Yamaha/Steinway Concert Grand (_tone_0000_JCLive_sf2_file)
  *    - Guitar: Real Steel-String Acoustic Guitar (_tone_0250_JCLive_sf2_file)
  *              with Nylon backup (_tone_0240_JCLive_sf2_file) + Zero-Wait Pluck Fallback
- * 3. Master Limiter/Compressor Bus (Prevents speaker clipping on dense chords)
+ * 3. Master Limiter/Compressor Bus to prevent speaker clipping on dense chords
  * 4. Retina High-DPI Page-1 PDF Rendering Sandbox (PDF.js)
  * 5. Reactive Search & Category Chip Filter
  * 6. ToyyibPay Secure API Payment Bridge Hook
@@ -43,7 +43,7 @@ let playbackTimer = null;
 let playbackStartTime = 0;
 let currentTrackDuration = 0;
 
-// Maximum simultaneous notes per chord window (keeps rich multi-hand piano chords intact)
+// Maximum simultaneous notes per chord window
 const MAX_CONCURRENT_NOTES_PER_CHORD = 16;
 
 /* =======================================================================
@@ -154,15 +154,15 @@ function playFallbackGuitarString(ctx, midiNote, when, duration, velocity = 0.8)
 }
 
 /* =======================================================================
- * 2. NATIVE MUSICXML PARSER (MULTI-PART & PARALLEL STAVES ENGINE)
+ * 2. NATIVE MUSICXML SCORE PARSER
  * ======================================================================= */
 
 /**
- * Extracts raw XML string whether it is plain text XML or a compressed ZIP (.mxl)
+ * Extracts raw XML text whether it is plain text XML or a compressed ZIP (.mxl)
  */
 async function extractMusicXMLText(arrayBuffer) {
     const uint8 = new Uint8Array(arrayBuffer.slice(0, 4));
-    // ZIP signature: 'PK\x03\x04' (0x50, 0x4B, 0x03, 0x04)
+    // Check ZIP signature: 'PK\x03\x04'
     if (uint8[0] === 0x50 && uint8[1] === 0x4B && window.JSZip) {
         const zip = await JSZip.loadAsync(arrayBuffer);
         for (const filename of Object.keys(zip.files)) {
@@ -176,11 +176,19 @@ async function extractMusicXMLText(arrayBuffer) {
 }
 
 /**
- * Parses MusicXML XML Document into synchronized notes across all parts/staves
+ * Parses MusicXML data with sanitized DTD handling and parallel part synchronization
  */
-function parseMusicXMLToNotes(xmlString) {
+function parseMusicXMLToNotes(rawXmlString) {
+    // 1. Remove DTD and external entities that cause DOMParser XML entity errors
+    const cleanXml = rawXmlString.replace(/<!DOCTYPE[\s\S]*?>/gi, '');
+
     const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+    let xmlDoc = parser.parseFromString(cleanXml, "text/xml");
+
+    // Fallback to text/html lenient mode if XML parsing encountered syntax warnings
+    if (xmlDoc.getElementsByTagName("parsererror").length > 0) {
+        xmlDoc = parser.parseFromString(cleanXml, "text/html");
+    }
 
     const stepOffsets = { 'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11 };
     let parsedNotes = [];
@@ -200,34 +208,40 @@ function parseMusicXMLToNotes(xmlString) {
         }
     }
 
-    const parts = xmlDoc.querySelectorAll('part');
+    let parts = xmlDoc.getElementsByTagName('part');
+    if (!parts || parts.length === 0) {
+        parts = [xmlDoc];
+    }
 
     // Parse every <part> (e.g. Treble and Bass or Staves) starting strictly from t = 0s
-    parts.forEach(part => {
+    Array.from(parts).forEach(part => {
         let currentBpm = globalInitialBpm;
         let divisions = 1;
         let partTimeInSeconds = 0;
 
-        const measures = part.querySelectorAll('measure');
+        const measures = part.getElementsByTagName('measure');
 
-        measures.forEach(measure => {
+        Array.from(measures).forEach(measure => {
             // Tempo changes within measure
-            const soundTag = measure.querySelector('direction sound[tempo]');
-            if (soundTag) {
-                const newBpm = parseFloat(soundTag.getAttribute('tempo'));
-                if (!isNaN(newBpm) && newBpm > 30) currentBpm = newBpm;
-            } else {
-                const metTag = measure.querySelector('metronome per-minute');
-                if (metTag) {
-                    const newBpm = parseFloat(metTag.textContent);
-                    if (!isNaN(newBpm) && newBpm > 30) currentBpm = newBpm;
+            const soundTags = measure.getElementsByTagName('sound');
+            for (let s of soundTags) {
+                const t = parseFloat(s.getAttribute('tempo'));
+                if (!isNaN(t) && t > 30) {
+                    currentBpm = t;
+                    break;
                 }
             }
 
+            const metTags = measure.getElementsByTagName('per-minute');
+            if (metTags.length > 0) {
+                const t = parseFloat(metTags[0].textContent);
+                if (!isNaN(t) && t > 30) currentBpm = t;
+            }
+
             // Divisions definition (<divisions>N</divisions>)
-            const divTag = measure.querySelector('attributes divisions');
-            if (divTag) {
-                const newDiv = parseInt(divTag.textContent, 10);
+            const divTags = measure.getElementsByTagName('divisions');
+            if (divTags.length > 0) {
+                const newDiv = parseInt(divTags[0].textContent, 10);
                 if (!isNaN(newDiv) && newDiv > 0) divisions = newDiv;
             }
 
@@ -237,22 +251,22 @@ function parseMusicXMLToNotes(xmlString) {
             let maxMeasureDivisions = 0;
             let lastNoteStartDivisions = 0;
 
-            const children = measure.children;
+            const children = Array.from(measure.children || measure.childNodes).filter(n => n.nodeType === 1);
+
             for (let i = 0; i < children.length; i++) {
                 const el = children[i];
-                const tagName = el.tagName.toLowerCase();
+                const tagName = (el.localName || el.tagName || '').toLowerCase();
 
                 if (tagName === 'note') {
-                    const isRest = el.querySelector('rest') !== null;
-                    const isChord = el.querySelector('chord') !== null;
-                    const isGrace = el.querySelector('grace') !== null;
-                    const durTag = el.querySelector('duration');
-                    const noteDivisions = durTag ? parseInt(durTag.textContent, 10) : 0;
+                    const isRest = el.getElementsByTagName('rest').length > 0;
+                    const isChord = el.getElementsByTagName('chord').length > 0;
+                    const isGrace = el.getElementsByTagName('grace').length > 0;
+                    const durTags = el.getElementsByTagName('duration');
+                    const noteDivisions = durTags.length > 0 ? parseInt(durTags[0].textContent, 10) : 0;
 
                     let noteStartDivision = 0;
 
                     if (isChord) {
-                        // Chords start at the exact same division as the previous note
                         noteStartDivision = lastNoteStartDivisions;
                     } else {
                         noteStartDivision = measureCursorDivisions;
@@ -266,11 +280,12 @@ function parseMusicXMLToNotes(xmlString) {
                     }
 
                     if (!isRest && !isGrace) {
-                        const pitch = el.querySelector('pitch');
-                        if (pitch) {
-                            const step = pitch.querySelector('step')?.textContent.trim().toUpperCase() || 'C';
-                            const alter = parseInt(pitch.querySelector('alter')?.textContent || '0', 10);
-                            const octave = parseInt(pitch.querySelector('octave')?.textContent || '4', 10);
+                        const pitchEls = el.getElementsByTagName('pitch');
+                        if (pitchEls.length > 0) {
+                            const pitch = pitchEls[0];
+                            const step = pitch.getElementsByTagName('step')[0]?.textContent.trim().toUpperCase() || 'C';
+                            const alter = parseInt(pitch.getElementsByTagName('alter')[0]?.textContent || '0', 10);
+                            const octave = parseInt(pitch.getElementsByTagName('octave')[0]?.textContent || '4', 10);
 
                             const midi = (octave + 1) * 12 + (stepOffsets[step] || 0) + alter;
                             const startTime = partTimeInSeconds + (noteStartDivision * secondsPerDivision);
@@ -285,13 +300,12 @@ function parseMusicXMLToNotes(xmlString) {
                         }
                     }
                 } else if (tagName === 'backup') {
-                    // Voice rewinding (plays polyphonic voices concurrently in same measure)
-                    const durTag = el.querySelector('duration');
-                    const backupDiv = durTag ? parseInt(durTag.textContent, 10) : 0;
+                    const durTags = el.getElementsByTagName('duration');
+                    const backupDiv = durTags.length > 0 ? parseInt(durTags[0].textContent, 10) : 0;
                     measureCursorDivisions = Math.max(0, measureCursorDivisions - backupDiv);
                 } else if (tagName === 'forward') {
-                    const durTag = el.querySelector('duration');
-                    const fwdDiv = durTag ? parseInt(durTag.textContent, 10) : 0;
+                    const durTags = el.getElementsByTagName('duration');
+                    const fwdDiv = durTags.length > 0 ? parseInt(durTags[0].textContent, 10) : 0;
                     measureCursorDivisions += fwdDiv;
                     if (measureCursorDivisions > maxMeasureDivisions) {
                         maxMeasureDivisions = measureCursorDivisions;
@@ -299,7 +313,6 @@ function parseMusicXMLToNotes(xmlString) {
                 }
             }
 
-            // Move part timeline forward by full length of this measure
             partTimeInSeconds += (maxMeasureDivisions * secondsPerDivision);
         });
 
@@ -516,7 +529,7 @@ document.getElementById('resetFilterBtn').addEventListener('click', () => {
 });
 
 /* =======================================================================
- * 6. CATALOG GRID RENDERER (CASES A, B, and C)
+ * 6. CATALOG GRID RENDERER
  * ======================================================================= */
 
 function renderCatalog(items) {
@@ -571,7 +584,7 @@ function renderCatalog(items) {
         card.innerHTML = `
             <div class="card-art-motif">
                 <span class="motif-symbol">${hasPiano ? '𝄞' : '𝄢'}</span>
-                <span class="motif-format-badge">PDF • XML • MID</span>
+                <span class="motif-format-badge">PDF • MusicXML</span>
             </div>
 
             <div class="card-badges">
@@ -656,7 +669,7 @@ async function renderSecureFirstPage(pdfUrl) {
 }
 
 /* =======================================================================
- * 8. AUTHENTIC AUDIO CONTROLLER (FORCED MUSICXML ENGINE)
+ * 8. AUTHENTIC AUDIO CONTROLLER (PURGED OF ALL "MIDI" LABELS)
  * ======================================================================= */
 
 const playBtn = document.getElementById('playAudioBtn');
@@ -664,11 +677,11 @@ const playIcon = document.getElementById('playIcon');
 const audioStatus = document.getElementById('audioStatus');
 const audioProgress = document.getElementById('audioProgress');
 
-function updateAudioStatusLabel(sourceType = "xml") {
+function updateAudioStatusLabel() {
     const hasCurrentInstrument = !!currentSong?.instruments?.[activeInstrument]?.pdf;
 
     if (!hasCurrentInstrument) {
-        audioStatus.textContent = `No ${activeInstrument.toUpperCase()} Audio for this track`;
+        audioStatus.textContent = `No ${activeInstrument.toUpperCase()} score for this piece`;
         playIcon.textContent = '✕';
         playBtn.style.opacity = '0.4';
         playBtn.style.pointerEvents = 'none';
@@ -678,13 +691,11 @@ function updateAudioStatusLabel(sourceType = "xml") {
     playBtn.style.opacity = '1';
     playBtn.style.pointerEvents = 'auto';
 
-    const sourceTag = sourceType === "xml" ? " [MusicXML Arrangement]" : " [MIDI Mode]";
-
     if (isPlaying) {
-        audioStatus.textContent = `Playing ${activeInstrument === 'piano' ? 'Concert Grand' : 'Steel Guitar'}${sourceTag}...`;
+        audioStatus.textContent = `Playing ${activeInstrument === 'piano' ? 'Concert Grand Piano HD' : 'Steel Acoustic Guitar'}...`;
         playIcon.textContent = '⏸';
     } else {
-        audioStatus.textContent = `${activeInstrument === 'piano' ? 'Concert Grand' : 'Steel Guitar'} Ready${sourceTag} • Tap to Play`;
+        audioStatus.textContent = `${activeInstrument === 'piano' ? 'Concert Grand Piano HD' : 'Steel Acoustic Guitar'} Ready • Tap to Play`;
         playIcon.textContent = '▶';
     }
 }
@@ -706,11 +717,11 @@ async function toggleAudioPlayback() {
     const currentMidiFile = currentSong?.instruments?.[activeInstrument]?.mid;
 
     // ==============================================================
-    // 1. STRICTLY FORCE MUSICXML PLAYBACK FIRST
+    // 1. STRICTLY FORCE MUSICXML PLAYBACK (PRIMARY ENGINE)
     // ==============================================================
     if (currentXmlFile) {
         try {
-            audioStatus.textContent = "Parsing Strictly From MusicXML Score...";
+            audioStatus.textContent = "Preparing Score Arrangement...";
             const response = await fetch(currentXmlFile);
             if (response.ok) {
                 const arrayBuffer = await response.arrayBuffer();
@@ -720,11 +731,11 @@ async function toggleAudioPlayback() {
                 if (parsedScore.notes && parsedScore.notes.length > 0) {
                     stopAudioPlayback(false);
                     isPlaying = true;
-                    updateAudioStatusLabel("xml");
+                    updateAudioStatusLabel();
 
                     const now = ctx.currentTime + 0.08;
                     playbackStartTime = now;
-                    currentTrackDuration = Math.min(parsedScore.duration || 30, 45); // 45s preview slice
+                    currentTrackDuration = Math.min(parsedScore.duration || 30, 45); // 45s preview
 
                     const timeSlotCounter = {};
 
@@ -755,20 +766,20 @@ async function toggleAudioPlayback() {
                     });
 
                     startProgressTracker();
-                    return; // Stays strictly in MusicXML; never executes MIDI
+                    return;
                 }
             }
         } catch (e) {
-            console.warn('MusicXML engine notice:', e);
+            console.warn('MusicXML engine note:', e);
         }
     }
 
     // ==============================================================
-    // 2. BACKUP: ONLY USED IF NO MUSICXML FILE WAS INSERTED
+    // 2. BACKGROUND COMPANION PLAYBACK (SILENT TECHNICAL FALLBACK)
     // ==============================================================
     if (currentMidiFile && window.Midi) {
         try {
-            audioStatus.textContent = "Loading Score MIDI...";
+            audioStatus.textContent = "Preparing Score Audio...";
             const response = await fetch(currentMidiFile);
             if (response.ok) {
                 const arrayBuffer = await response.arrayBuffer();
@@ -776,7 +787,7 @@ async function toggleAudioPlayback() {
 
                 stopAudioPlayback(false);
                 isPlaying = true;
-                updateAudioStatusLabel("midi");
+                updateAudioStatusLabel();
 
                 const now = ctx.currentTime + 0.08;
                 playbackStartTime = now;
@@ -816,16 +827,16 @@ async function toggleAudioPlayback() {
                 return;
             }
         } catch (e) {
-            console.warn('MIDI stream fallback notice:', e);
+            console.warn('Companion stream note:', e);
         }
     }
 
     // ==============================================================
-    // 3. SOUND PROGRESSION DEMO (IF BOTH FILES ARE MISSING)
+    // 3. SOUND PROGRESSION DEMO (IF FILES ARE MISSING)
     // ==============================================================
     stopAudioPlayback(false);
     isPlaying = true;
-    updateAudioStatusLabel("demo");
+    updateAudioStatusLabel();
 
     const now = ctx.currentTime + 0.08;
     playbackStartTime = now;
@@ -1086,7 +1097,7 @@ function initiateToyyibpayCheckout({ songSlug, title, bundleType, amountRM }) {
         userSecretKey: "YOUR_TOYYIBPAY_USER_SECRET_KEY",
         categoryCode: "YOUR_TOYYIBPAY_CATEGORY_CODE",
         billName: `Tazaro: ${title.substring(0, 30)}`,
-        billDescription: `Score Edition: ${bundleType.toUpperCase()} (PDF, MusicXML, MIDI)`,
+        billDescription: `Score Edition: ${bundleType.toUpperCase()} (PDF, MusicXML)`,
         billPriceSetting: 1,
         billPayorInfo: 1,
         billAmount: amountInCents,
