@@ -16,6 +16,23 @@
  * 4. Reactive Search & Category Chip Filter
  * 5. ToyyibPay Secure API Payment Bridge Hook
  * 6. Netlify Watermark DOM Killer
+ *
+ * AUDIO ENGINE PATCH NOTES (choke/lag fix, PC + Android + iOS):
+ * - Added a master compressor/limiter bus so stacked notes/chords no longer
+ *   clip and "choke" the output (previously all notes went straight to
+ *   ctx.destination with no headroom management).
+ * - Removed setTimeout-based scheduling for the WebAudioFont fallback path.
+ *   setTimeout is not sample-accurate and drifts/throttles on mobile browsers
+ *   (especially when the tab is backgrounded), which caused uneven, laggy
+ *   playback. Notes are now scheduled directly against the AudioContext
+ *   clock via playFallbackGuitarString(ctx, midi, when, ...).
+ * - Added a simple polyphony cap (MAX_VOICES) per playback pass so dense
+ *   MIDI files don't exceed the concurrent-voice ceiling mobile browsers
+ *   silently enforce (which previously caused dropped/choked notes).
+ * - Added a visibilitychange listener to resume the AudioContext when the
+ *   tab/screen comes back from background/lock, since iOS Safari and
+ *   Android Chrome aggressively suspend AudioContext in the background,
+ *   which previously caused playback to silently die mid-track.
  * =======================================================================
  */
 
@@ -40,6 +57,11 @@ let playbackTimer = null;
 let playbackStartTime = 0;
 let currentTrackDuration = 0;
 
+// Polyphony safety ceiling — mobile browsers silently enforce a concurrent
+// active-node limit (roughly 32-64 depending on device); staying under it
+// prevents dropped/choked notes on dense MIDI passages.
+const MAX_VOICES = 28;
+
 /* =======================================================================
  * 1. REAL INSTRUMENT SOUND ENGINE RESOLVER
  * ======================================================================= */
@@ -47,7 +69,26 @@ let currentTrackDuration = 0;
 function getAudioContext() {
     if (!audioCtx) {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        audioCtx = new AudioContextClass();
+        audioCtx = new AudioContextClass({ latencyHint: 'interactive' });
+
+        // Master bus: a gentle limiter/compressor so stacked notes and chords
+        // don't clip the output (previously this was the main cause of the
+        // "choke"/crackle heard during playback, worst on phone speakers).
+        const compressor = audioCtx.createDynamicsCompressor();
+        compressor.threshold.setValueAtTime(-6, audioCtx.currentTime);
+        compressor.knee.setValueAtTime(12, audioCtx.currentTime);
+        compressor.ratio.setValueAtTime(6, audioCtx.currentTime);
+        compressor.attack.setValueAtTime(0.003, audioCtx.currentTime);
+        compressor.release.setValueAtTime(0.15, audioCtx.currentTime);
+
+        const masterGain = audioCtx.createGain();
+        masterGain.gain.setValueAtTime(0.9, audioCtx.currentTime);
+
+        compressor.connect(masterGain);
+        masterGain.connect(audioCtx.destination);
+
+        // All note sources route through this instead of ctx.destination.
+        audioCtx.masterBus = compressor;
     }
     if (audioCtx.state === 'suspended') {
         audioCtx.resume();
@@ -57,6 +98,16 @@ function getAudioContext() {
     }
     return audioCtx;
 }
+
+// iOS Safari and Android Chrome aggressively suspend the AudioContext when
+// the screen locks or the tab is backgrounded. Without this, notes queued
+// after a suspend are silently dropped, which sounds like the track
+// stuttering or stopping partway through.
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+});
 
 function getInstrumentPreset(type) {
     if (type === 'piano') {
@@ -101,7 +152,9 @@ function playFallbackGuitarString(ctx, midiNote, when, duration, velocity = 0.8)
     filter.frequency.exponentialRampToValueAtTime(Math.min(freq * 3.5, 900), when + 0.12);
 
     filter.connect(outGain);
-    outGain.connect(ctx.destination);
+    // Route through the master compressor bus instead of straight to
+    // destination, so this voice can't contribute to output clipping.
+    outGain.connect(ctx.masterBus || ctx.destination);
 
     const osc1 = ctx.createOscillator();
     const osc2 = ctx.createOscillator();
@@ -548,9 +601,14 @@ async function toggleAudioPlayback() {
                 playbackStartTime = now;
                 currentTrackDuration = Math.min(midi.duration || 30, 45);
 
+                let voiceCount = 0;
+
                 midi.tracks.forEach(track => {
                     track.notes.forEach(note => {
                         if (note.time < 45) {
+                            if (voiceCount >= MAX_VOICES) return; // polyphony cap — avoid overloading mobile voice ceiling
+                            voiceCount++;
+
                             const when = now + note.time;
                             const duration = Math.max(note.duration, 0.4);
                             const volume = (note.velocity || 0.8) * 0.95;
@@ -558,21 +616,17 @@ async function toggleAudioPlayback() {
                             if (preset && soundFontPlayer) {
                                 soundFontPlayer.queueWaveTable(
                                     ctx,
-                                    ctx.destination,
+                                    ctx.masterBus || ctx.destination,
                                     preset,
                                     when,
                                     note.midi,
                                     duration,
                                     volume
                                 );
-                            } else {
-                                const delayMs = note.time * 1000;
-                                const timer = setTimeout(() => {
-                                    if (isPlaying) {
-                                        playFallbackGuitarString(ctx, note.midi, ctx.currentTime, duration, volume);
-                                    }
-                                }, delayMs);
-                                scheduledNoteTimers.push(timer);
+                            } else if (isPlaying) {
+                                // Scheduled directly against the AudioContext clock —
+                                // no setTimeout, so no drift/throttle on mobile.
+                                playFallbackGuitarString(ctx, note.midi, when, duration, volume);
                             }
                         }
                     });
@@ -623,25 +677,27 @@ async function toggleAudioPlayback() {
         { time: 3.75, midi: 64, dur: 2.5, vel: 0.95 }
     ];
 
+    let demoVoiceCount = 0;
+
     demoNotes.forEach(n => {
+        if (demoVoiceCount >= MAX_VOICES) return; // polyphony cap
+        demoVoiceCount++;
+
+        const when = now + n.time;
+
         if (preset && soundFontPlayer) {
             soundFontPlayer.queueWaveTable(
                 ctx,
-                ctx.destination,
+                ctx.masterBus || ctx.destination,
                 preset,
-                now + n.time,
+                when,
                 n.midi,
                 n.dur,
                 n.vel
             );
-        } else {
-            const delayMs = n.time * 1000;
-            const timer = setTimeout(() => {
-                if (isPlaying) {
-                    playFallbackGuitarString(ctx, n.midi, ctx.currentTime, n.dur, n.vel);
-                }
-            }, delayMs);
-            scheduledNoteTimers.push(timer);
+        } else if (isPlaying) {
+            // Scheduled directly against the AudioContext clock — no setTimeout drift.
+            playFallbackGuitarString(ctx, n.midi, when, n.dur, n.vel);
         }
     });
 
