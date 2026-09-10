@@ -194,7 +194,7 @@ function applyFiltersAndSearch() {
     renderCatalog(filteredCatalog);
 }
 
-// Live Search Input Event
+// Search Input Logic
 const searchInput = document.getElementById('searchInput');
 const searchClearBtn = document.getElementById('searchClear');
 
@@ -212,7 +212,7 @@ searchClearBtn.addEventListener('click', () => {
     applyFiltersAndSearch();
 });
 
-// Category Filter Chips Events
+// Category Filter Chips
 const chips = document.querySelectorAll('.chip');
 chips.forEach(chip => {
     chip.addEventListener('click', () => {
@@ -313,7 +313,6 @@ async function renderSecureFirstPage(pdfUrl) {
         const targetWidth = isMobile ? Math.min(window.innerWidth - 36, 420) : 520;
         const scale = targetWidth / baseViewport.width;
 
-        // Device Pixel Ratio scaling for Retina displays
         const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
         const viewport = page.getViewport({ scale: scale * dpr });
 
