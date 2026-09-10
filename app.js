@@ -1,50 +1,75 @@
 /**
- * TAZARO MUSIC SHEET - SYSTEM ARCHITECTURE
- * 1. File Discovery & Automatic Consolidation Engine
- * 2. Secure Page 1 PDF Rendering Engine (PDF.js)
- * 3. MIDI Audio Synthesis (Tone.js)
- * 4. ToyyibPay Gateway Integration Hook
+ * TAZARO MUSIC SHEET - DYNAMIC ZERO-HARDCODE ENGINE
  */
 
 // Configure PDF.js Worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-/* -------------------------------------------------------------
- * 1. FILE SYSTEM SIMULATOR & GROUPING LOGIC
- * Consolidates matching files from sheet/piano & sheet/guitar
- * ------------------------------------------------------------- */
-const rawFileSystemInventory = [
-    // Piano Directory Entries
-    "sheet/piano/moonlight-sonata.pdf",
-    "sheet/piano/moonlight-sonata.musicxml",
-    "sheet/piano/moonlight-sonata.mid",
-    "sheet/piano/canon-in-d.pdf",
-    "sheet/piano/canon-in-d.musicxml",
-    "sheet/piano/canon-in-d.mid",
-    // Guitar Directory Entries
-    "sheet/guitar/moonlight-sonata.pdf",
-    "sheet/guitar/moonlight-sonata.musicxml",
-    "sheet/guitar/moonlight-sonata.mid",
-    "sheet/guitar/canon-in-d.pdf",
-    "sheet/guitar/canon-in-d.musicxml",
-    "sheet/guitar/canon-in-d.mid"
-];
+let catalog = [];
+let currentSong = null;
+let activeInstrument = 'piano';
 
-function groupSheetFiles(fileList) {
+/* -------------------------------------------------------------
+ * 1. DYNAMIC FILE DISCOVERY & AGGREGATOR
+ * ------------------------------------------------------------- */
+
+// Normalizes file names into a clean group slug
+// e.g., "Canon_In_D.final.pdf" and "Canon-In-D.mid" -> "canon-in-d"
+function generateSlug(filename) {
+    const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.'));
+    return nameWithoutExt
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+}
+
+function cleanTitle(slug) {
+    return slug
+        .split('-')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+}
+
+async function fetchDynamicInventory() {
+    const grid = document.getElementById('songGrid');
+    grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 3rem;">
+        Discovering sheet library...
+    </div>`;
+
+    try {
+        // Fetch direct from the dynamic filesystem scanner
+        const response = await fetch('scan.php');
+        if (!response.ok) throw new Error('Failed to access scan.php endpoint');
+        
+        const fileList = await response.json();
+        catalog = processDiscoveredFiles(fileList);
+        renderCatalog(catalog);
+    } catch (error) {
+        console.error('Scan Error:', error);
+        grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: #ff6b6b; padding: 3rem;">
+            Unable to auto-scan sheet folder. Ensure <code>scan.php</code> is hosted on a PHP/local server.
+        </div>`;
+    }
+}
+
+function processDiscoveredFiles(filePaths) {
     const registry = {};
 
-    fileList.forEach(path => {
-        const parts = path.split('/');
-        const instrument = parts[1]; // 'piano' or 'guitar'
-        const filename = parts[2];
-        const lastDot = filename.lastIndexOf('.');
-        const slug = filename.substring(0, lastDot);
-        const extension = filename.substring(lastDot + 1);
+    filePaths.forEach(path => {
+        // Path format: sheet/{instrument}/{fileName}
+        const segments = path.split('/');
+        if (segments.length < 3) return;
+
+        const instrument = segments[1].toLowerCase(); // 'piano' or 'guitar'
+        const filename = segments[2];
+        const ext = filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
+        const slug = generateSlug(filename);
 
         if (!registry[slug]) {
             registry[slug] = {
                 slug: slug,
-                title: slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+                title: cleanTitle(slug),
                 instruments: {
                     piano: { pdf: null, musicxml: null, mid: null },
                     guitar: { pdf: null, musicxml: null, mid: null }
@@ -53,100 +78,102 @@ function groupSheetFiles(fileList) {
         }
 
         if (registry[slug].instruments[instrument]) {
-            registry[slug].instruments[instrument][extension] = path;
+            // Map standard format keys
+            if (ext === 'pdf') registry[slug].instruments[instrument].pdf = path;
+            if (ext === 'xml' || ext === 'musicxml') registry[slug].instruments[instrument].musicxml = path;
+            if (ext === 'mid' || ext === 'midi') registry[slug].instruments[instrument].mid = path;
         }
     });
 
     return Object.values(registry);
 }
 
-const catalog = groupSheetFiles(rawFileSystemInventory);
-
 /* -------------------------------------------------------------
  * 2. CATALOG RENDERER
  * ------------------------------------------------------------- */
-const songGrid = document.getElementById('songGrid');
-
-function renderCatalog() {
+function renderCatalog(items) {
+    const songGrid = document.getElementById('songGrid');
     songGrid.innerHTML = '';
-    catalog.forEach(item => {
+
+    if (items.length === 0) {
+        songGrid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 3rem;">
+            No sheets found in <code>/sheet/piano</code> or <code>/sheet/guitar</code>.
+        </div>`;
+        return;
+    }
+
+    items.forEach(song => {
+        const hasPiano = !!song.instruments.piano.pdf;
+        const hasGuitar = !!song.instruments.guitar.pdf;
+
         const card = document.createElement('div');
         card.className = 'song-card';
         card.innerHTML = `
             <div class="card-header">
                 <div class="card-badges">
-                    <span class="card-badge">Piano</span>
-                    <span class="card-badge">Guitar</span>
+                    ${hasPiano ? '<span class="card-badge">Piano</span>' : ''}
+                    ${hasGuitar ? '<span class="card-badge">Guitar</span>' : ''}
                 </div>
-                <h3>${item.title}</h3>
-                <p style="color:var(--text-muted); font-size:0.85rem;">Includes Complete Score, MusicXML & MIDI</p>
+                <h3>${song.title}</h3>
+                <p style="color:var(--text-muted); font-size:0.85rem;">Includes Full Score, MusicXML & MIDI</p>
             </div>
             <div class="card-footer">
-                <span>Starts at <strong class="price-tag">RM 5.00</strong></span>
+                <span>${hasPiano && hasGuitar ? 'Bundle Deal Available' : 'Single Edition'}</span>
                 <span style="color: var(--accent-brass); font-weight:600;">Inspect & Play →</span>
             </div>
         `;
-        card.addEventListener('click', () => openPreviewModal(item));
+        card.addEventListener('click', () => openPreviewModal(song));
         songGrid.appendChild(card);
     });
 }
 
 /* -------------------------------------------------------------
- * 3. PREVIEW STAGE (PDF PAGE 1 STRICT ISOLATION)
+ * 3. DYNAMIC PREVIEW & SECURITY (PAGE 1 ONLY)
  * ------------------------------------------------------------- */
-let currentSong = null;
-let activeInstrument = 'piano';
-let pdfDoc = null;
-
 async function renderSecureFirstPage(pdfUrl) {
     const canvas = document.getElementById('sheetCanvas');
     const ctx = canvas.getContext('2d');
 
+    if (!pdfUrl) {
+        ctx.fillStyle = "#121519";
+        ctx.fillRect(0, 0, 450, 600);
+        ctx.fillStyle = "#8E95A0";
+        ctx.font = "14px 'Plus Jakarta Sans'";
+        ctx.fillText("Edition not available for this instrument.", 70, 300);
+        return;
+    }
+
     try {
-        // Load PDF document safely
-        pdfDoc = await pdfjsLib.getDocument(pdfUrl).promise;
-        // Strictly request Page 1 ONLY
-        const page = await pdfDoc.getPage(1);
+        const loadingTask = pdfjsLib.getDocument(pdfUrl);
+        const pdf = await loadingTask.promise;
+        
+        // Strict Security Constraint: Page 1 Only
+        const page = await pdf.getPage(1);
         
         const viewport = page.getViewport({ scale: 1.4 });
         canvas.height = viewport.height;
         canvas.width = viewport.width;
 
-        const renderContext = {
+        await page.render({
             canvasContext: ctx,
             viewport: viewport
-        };
-        await page.render(renderContext).promise;
+        }).promise;
     } catch (err) {
-        console.warn('Local preview placeholder mode: Rendering canvas dummy representation.');
-        // High-end fallback if path unavailable in local demo without web server
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, 450, 600);
-        ctx.fillStyle = "#222222";
-        ctx.font = "20px Cinzel";
-        ctx.fillText(`${currentSong.title} (${activeInstrument.toUpperCase()})`, 30, 80);
-        ctx.font = "14px 'Plus Jakarta Sans'";
-        ctx.fillText("Page 1 Preview (Watermarked Demo)", 30, 120);
-        ctx.beginPath();
-        for(let i = 160; i < 550; i += 40) {
-            ctx.moveTo(30, i); ctx.lineTo(420, i);
-        }
-        ctx.strokeStyle = "#dddddd";
-        ctx.stroke();
+        console.error("PDF Preview failure:", err);
     }
 }
 
 /* -------------------------------------------------------------
- * 4. AUDIO SYNTHESIS & PREVIEW ENGINE (Tone.js)
+ * 4. AUDIO PREVIEW PLAYER (Tone.js + MIDI File Support)
  * ------------------------------------------------------------- */
-let synth = null;
 let isPlaying = false;
+let synth = null;
 const playBtn = document.getElementById('playAudioBtn');
 const playIcon = document.getElementById('playIcon');
 const audioStatus = document.getElementById('audioStatus');
 const audioProgress = document.getElementById('audioProgress');
 
-async function toggleAudio() {
+async function toggleAudioPlayback() {
     await Tone.start();
 
     if (isPlaying) {
@@ -154,72 +181,136 @@ async function toggleAudio() {
         Tone.Transport.cancel();
         isPlaying = false;
         playIcon.textContent = '▶';
-        audioStatus.textContent = "Audio Paused";
+        audioStatus.textContent = 'Playback Paused';
         return;
     }
 
-    // Modern polyphonic acoustic-style synth
+    const currentMidiFile = currentSong.instruments[activeInstrument].mid;
+
     if (!synth) {
         synth = new Tone.PolySynth(Tone.Synth, {
             oscillator: { type: "triangle" },
-            envelope: { attack: 0.02, decay: 0.1, sustain: 0.3, release: 1 }
+            envelope: { attack: 0.05, decay: 0.2, sustain: 0.4, release: 1.2 }
         }).toDestination();
     }
 
-    // Play representative progression (Moonlight / Classical Demo preview)
-    const chords = [
-        { time: 0, notes: ["C#3", "G#3", "C#4", "E4"] },
-        { time: 1.5, notes: ["B2", "G#3", "D#4", "E4"] },
-        { time: 3.0, notes: ["A2", "A3", "C#4", "E4"] },
-        { time: 4.5, notes: ["F#2", "A3", "D4", "F#4"] }
+    if (currentMidiFile && window.Midi) {
+        try {
+            audioStatus.textContent = 'Loading MIDI audio...';
+            const response = await fetch(currentMidiFile);
+            const arrayBuffer = await response.arrayBuffer();
+            const midiData = new Midi(arrayBuffer);
+
+            Tone.Transport.cancel();
+            
+            // Schedule actual notes from the MIDI file
+            midiData.tracks.forEach(track => {
+                track.notes.forEach(note => {
+                    Tone.Transport.schedule(time => {
+                        synth.triggerAttackRelease(note.name, note.duration, time, note.velocity);
+                    }, note.time);
+                });
+            });
+
+            Tone.Transport.start();
+            isPlaying = true;
+            playIcon.textContent = '⏸';
+            audioStatus.textContent = `Playing ${activeInstrument.toUpperCase()} MIDI...`;
+            trackProgress(midiData.duration);
+            return;
+        } catch (e) {
+            console.warn('Direct MIDI parsing failed. Falling back to synth engine.');
+        }
+    }
+
+    // Fallback: Acoustic melodic phrase preview
+    const sampleChord = [
+        { time: 0, notes: ["E3", "B3", "E4", "G4"] },
+        { time: 1.2, notes: ["D3", "A3", "D4", "F#4"] },
+        { time: 2.4, notes: ["C3", "G3", "C4", "E4"] },
+        { time: 3.6, notes: ["B2", "F#3", "B3", "D#4"] }
     ];
 
     const part = new Tone.Part((time, value) => {
-        synth.triggerAttackRelease(value.notes, "2n", time);
-    }, chords).start(0);
+        synth.triggerAttackRelease(value.notes, "1.5n", time);
+    }, sampleChord).start(0);
 
     part.loop = true;
-    part.loopEnd = 6.0;
+    part.loopEnd = 4.8;
 
     Tone.Transport.start();
     isPlaying = true;
     playIcon.textContent = '⏸';
-    audioStatus.textContent = `Playing ${activeInstrument.toUpperCase()} MIDI preview...`;
-
-    // Visualizer loop
-    const updateProgress = () => {
-        if (!isPlaying) return;
-        const progress = (Tone.Transport.seconds % 6.0) / 6.0;
-        audioProgress.style.width = `${progress * 100}%`;
-        requestAnimationFrame(updateProgress);
-    };
-    updateProgress();
+    audioStatus.textContent = `Playing ${activeInstrument.toUpperCase()} sample preview...`;
+    trackProgress(4.8);
 }
 
-playBtn.addEventListener('click', toggleAudio);
+function trackProgress(duration) {
+    const update = () => {
+        if (!isPlaying) return;
+        const curr = Tone.Transport.seconds % duration;
+        audioProgress.style.width = `${(curr / duration) * 100}%`;
+        requestAnimationFrame(update);
+    };
+    update();
+}
+
+playBtn.addEventListener('click', toggleAudioPlayback);
 
 /* -------------------------------------------------------------
- * 5. MODAL INTERACTION & INSTRUMENT SWITCHING
+ * 5. MODAL CONTROLLER & COMMERCE OPTIONS
  * ------------------------------------------------------------- */
 const modal = document.getElementById('previewModal');
-const modalCloseBtn = document.getElementById('modalCloseBtn');
 const tabPiano = document.getElementById('tabPiano');
 const tabGuitar = document.getElementById('tabGuitar');
 
 function openPreviewModal(song) {
     currentSong = song;
     document.getElementById('previewTitle').innerText = song.title;
-    activeInstrument = 'piano';
+
+    // Detect default starting instrument based on what is available
+    if (song.instruments.piano.pdf) {
+        activeInstrument = 'piano';
+    } else {
+        activeInstrument = 'guitar';
+    }
+
+    // Visibility toggles for tabs if one doesn't exist
+    tabPiano.style.display = song.instruments.piano.pdf ? 'block' : 'none';
+    tabGuitar.style.display = song.instruments.guitar.pdf ? 'block' : 'none';
+
+    // Configure pricing options based on inventory
+    adjustPricingOptions(song);
     updateModalView();
     modal.classList.add('active');
+}
+
+function adjustPricingOptions(song) {
+    const hasPiano = !!song.instruments.piano.pdf;
+    const hasGuitar = !!song.instruments.guitar.pdf;
+    const bothOption = document.querySelector('.price-option[data-bundle="both"]');
+    const pianoOption = document.querySelector('.price-option[data-bundle="piano"]');
+    const guitarOption = document.querySelector('.price-option[data-bundle="guitar"]');
+
+    bothOption.style.display = (hasPiano && hasGuitar) ? 'flex' : 'none';
+    pianoOption.style.display = hasPiano ? 'flex' : 'none';
+    guitarOption.style.display = hasGuitar ? 'flex' : 'none';
+
+    // Auto-select best option
+    if (hasPiano && hasGuitar) {
+        bothOption.click();
+    } else if (hasPiano) {
+        pianoOption.click();
+    } else {
+        guitarOption.click();
+    }
 }
 
 function updateModalView() {
     tabPiano.classList.toggle('active', activeInstrument === 'piano');
     tabGuitar.classList.toggle('active', activeInstrument === 'guitar');
-    
-    // Stop audio if running
-    if(isPlaying) toggleAudio();
+
+    if (isPlaying) toggleAudioPlayback();
 
     const pdfPath = currentSong.instruments[activeInstrument].pdf;
     renderSecureFirstPage(pdfPath);
@@ -228,77 +319,47 @@ function updateModalView() {
 tabPiano.addEventListener('click', () => { activeInstrument = 'piano'; updateModalView(); });
 tabGuitar.addEventListener('click', () => { activeInstrument = 'guitar'; updateModalView(); });
 
-modalCloseBtn.addEventListener('click', () => {
+document.getElementById('modalCloseBtn').addEventListener('click', () => {
     modal.classList.remove('active');
-    if (isPlaying) toggleAudio();
+    if (isPlaying) toggleAudioPlayback();
 });
 
 /* -------------------------------------------------------------
- * 6. COMMERCE: PRICING ENGINE & TOYYIBPAY INTEGRATION
+ * 6. TOYYIBPAY INTEGRATION PLACEHOLDER
  * ------------------------------------------------------------- */
-const priceOptions = document.querySelectorAll('.price-option');
-const dynamicPriceLabel = document.getElementById('dynamicPriceLabel');
-let selectedBundle = 'both';
-let selectedPrice = "10.00";
-
-priceOptions.forEach(opt => {
-    opt.addEventListener('click', () => {
-        priceOptions.forEach(o => o.classList.remove('selected'));
-        opt.classList.add('selected');
-        opt.querySelector('input').checked = true;
-        
-        selectedBundle = opt.getAttribute('data-bundle');
-        selectedPrice = opt.getAttribute('data-price');
-        dynamicPriceLabel.textContent = `RM ${parseFloat(selectedPrice).toFixed(2)}`;
-    });
-});
-
 document.getElementById('toyyibpaySubmit').addEventListener('click', () => {
-    executeToyyibPayCheckout({
+    const selected = document.querySelector('.price-option.selected');
+    const bundle = selected.getAttribute('data-bundle');
+    const price = selected.getAttribute('data-price');
+
+    initiateToyyibpayCheckout({
         songSlug: currentSong.slug,
-        bundleType: selectedBundle,
-        amountRM: selectedPrice,
-        title: currentSong.title
+        title: currentSong.title,
+        bundleType: bundle,
+        amountRM: price
     });
 });
 
-/**
- * ToyyibPay Integration Hook (Ready for Production Server Hookup)
- */
-function executeToyyibPayCheckout({ songSlug, bundleType, amountRM, title }) {
-    console.log(`[TOYYIBPAY DISPATCH] Preparing bill for ${title}...`);
-    
-    const payload = {
-        userSecretKey: "YOUR_TOYYIBPAY_USER_SECRET_KEY", // Place your private key in your backend
+function initiateToyyibpayCheckout({ songSlug, title, bundleType, amountRM }) {
+    // Exact payload signature expected by ToyyibPay
+    const paymentData = {
+        userSecretKey: "YOUR_TOYYIBPAY_SECRET_KEY", // Configure in server-side proxy
         categoryCode: "YOUR_CATEGORY_CODE",
-        billName: `Tazaro Sheet: ${title}`,
-        billDescription: `Format: PDF, MusicXML, MIDI (${bundleType.toUpperCase()})`,
+        billName: `Tazaro: ${title}`,
+        billDescription: `Score Bundle: ${bundleType.toUpperCase()}`,
         billPriceSetting: 1,
         billPayorInfo: 1,
-        billAmount: (parseFloat(amountRM) * 100).toString(), // Toyyibpay uses Cents (RM 10 = 1000)
-        billReturnUrl: window.location.origin + "/payment-success",
-        billCallbackUrl: window.location.origin + "/api/toyyibpay-callback",
-        billExternalReferenceNo: `TAZ-${songSlug}-${bundleType}-${Date.now()}`
+        billAmount: (parseFloat(amountRM) * 100).toString(), // Cents format (RM5 = 500)
+        billReturnUrl: `${window.location.origin}/success.html`,
+        billCallbackUrl: `${window.location.origin}/api/payment-callback.php`,
+        billExternalReferenceNo: `TAZ-${songSlug}-${Date.now()}`
     };
 
-    // Demonstrating the outgoing handoff:
-    alert(`[ToyyibPay Bridge Initialization]\nAmount: RM ${amountRM}\nSong: ${title}\nVariant: ${bundleType}\n\nRedirecting to ToyyibPay secure gateway...`);
+    console.log("[ToyyibPay] Ready to forward payload:", paymentData);
+    alert(`[ToyyibPay Trigger]\nBill: ${paymentData.billName}\nPrice: RM ${amountRM}\n\nRedirecting to payment gateway...`);
     
-    /* 
-     PRODUCTION POST-CALL EXAMPLE:
-     fetch('/api/create-toyyibpay-bill', {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify(payload)
-     })
-     .then(res => res.json())
-     .then(data => {
-         if(data[0] && data[0].BillCode) {
-             window.location.href = `https://toyyibpay.com/${data[0].BillCode}`;
-         }
-     });
-    */
+    // In production, execute POST call to your ToyyibPay proxy endpoint here
 }
 
-// Initial Boot
-renderCatalog();
+// Initial Boot: Discover all files automatically
+fetchDynamicInventory();
