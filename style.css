@@ -578,7 +578,6 @@ body {
     color: #000000;
     background: var(--accent-gold);
 }
-/* Disabled Tab Styling for Unavailable Instrument */
 .stage-tab.disabled {
     opacity: 0.35;
     cursor: not-allowed;
