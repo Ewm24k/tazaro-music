@@ -15,12 +15,14 @@
     <!-- MIDI Parser Engine -->
     <script src="https://cdn.jsdelivr.net/npm/@tonejs/midi"></script>
     
-    <!-- WebAudioFont Engine (Real Recorded Acoustic Soundbanks) -->
+    <!-- WebAudioFont Core Engine -->
     <script src="https://cdn.jsdelivr.net/npm/webaudiofont@3.0.4/npm/dist/WebAudioFontPlayer.js"></script>
-    <!-- Real Concert Grand Piano Wave Table (Steinway / Yamaha Soundbank) -->
+    <!-- 1. Real Concert Grand Piano Wave Table (Yamaha / Steinway JCLive) -->
     <script src="https://cdn.jsdelivr.net/gh/surikov/webaudiofontdata@master/sound/0000_JCLive_sf2_file.js"></script>
-    <!-- Real Classical Acoustic Nylon Guitar Wave Table (Spanish Acoustic Guitar Soundbank) -->
-    <script src="https://cdn.jsdelivr.net/gh/surikov/webaudiofontdata@master/sound/0240_Acoustic_Guitar_nylon_sf2_file.js"></script>
+    <!-- 2. Real Steel-String Acoustic Guitar Wave Table (Ori Acoustic Guitar Sound) -->
+    <script src="https://cdn.jsdelivr.net/gh/surikov/webaudiofontdata@master/sound/0250_JCLive_sf2_file.js"></script>
+    <!-- 3. Real Nylon Classical Guitar Wave Table (Warm Classical Preset Backup) -->
+    <script src="https://cdn.jsdelivr.net/gh/surikov/webaudiofontdata@master/sound/0240_JCLive_sf2_file.js"></script>
     
     <link rel="stylesheet" href="style.css">
 </head>
@@ -134,7 +136,7 @@
                                 <span id="playIcon">▶</span>
                             </button>
                             <div class="audio-track-info">
-                                <span class="audio-status" id="audioStatus">Concert Grand Piano Sample Ready • Tap to Play</span>
+                                <span class="audio-status" id="audioStatus">Concert Grand Piano Ready • Tap to Play</span>
                                 <div class="audio-progress-bar">
                                     <div class="audio-progress-fill" id="audioProgress"></div>
                                 </div>
