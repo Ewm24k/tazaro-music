@@ -3,23 +3,21 @@
  * TAZARO MUSIC SHEET — CORE PLATFORM ENGINE
  * =======================================================================
  * Features:
- * 1. Animated Editorial Hero Carousel
- * 2. Real-Time Fuzzy Search & Category Chip Filtering Engine
- * 3. Multi-Tier File Discovery (Netlify Function -> Manifest -> PHP)
- * 4. Retina High-DPI Page-1 PDF Rendering Sandbox (PDF.js)
- * 5. High-Definition Concert Soundfont Audio Player (Steinway & Classical Guitar)
- *    - Replaces CPU-heavy synthesis with native Soundfont sample streaming
- *    - Zero choking, stuttering, or buffer-underruns on phones & PCs
- * 6. Dynamic Dual-Tier Pricing Model (RM 5 Solo / RM 10 Bundle)
+ * 1. Background Soundfont Pre-Warming (Pre-loads Piano & Guitar)
+ * 2. Play Button State Machine (Strict Disabled during Load -> Auto Ready)
+ * 3. Fast Soundfont Engine (Steinway Grand & Nylon Guitar)
+ * 4. Fuzzy Live Search & Category Chip Filter
+ * 5. Retina High-DPI Page-1 PDF Sandbox
+ * 6. Dynamic Dual-Tier Pricing Selector (RM 5 / RM 10)
  * 7. ToyyibPay Secure API Payment Bridge Hook
- * 8. Netlify Badge Auto-Remover Mutation Observer
+ * 8. Dynamic Netlify Watermark DOM Killer
  * =======================================================================
  */
 
 // Initialize PDF.js Web Worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-// Global Engine State
+// Global Catalog State
 let masterCatalog = [];
 let filteredCatalog = [];
 let currentSong = null;
@@ -29,10 +27,15 @@ let searchQuery = '';
 
 // Soundfont Native Audio Engine State
 let audioCtx = null;
-let soundfontCache = {
+const soundfontCache = {
     piano: null,
     guitar: null
 };
+const loadPromises = {
+    piano: null,
+    guitar: null
+};
+
 let isPlaying = false;
 let activeAudioNodes = [];
 let playbackTimer = null;
@@ -40,12 +43,9 @@ let playbackStartTime = 0;
 let currentTrackDuration = 0;
 
 /* =======================================================================
- * 1. HD AUDIO ENGINE SETUP (Steinway Grand & Nylon Guitar)
+ * 1. OPTIMIZED HD AUDIO ENGINE & PLAY BUTTON STATE CONTROLLER
  * ======================================================================= */
 
-/**
- * Initializes and unlocks the Web Audio Context for iOS / Android policy.
- */
 function getAudioContext() {
     if (!audioCtx) {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -58,29 +58,83 @@ function getAudioContext() {
 }
 
 /**
- * Preloads or retrieves the cached HD Soundfont instrument.
+ * UI State Machine for Play Button & Audio Track Info
+ * @param {'loading' | 'ready' | 'playing' | 'error'} state 
  */
-async function loadInstrument(type) {
+function setAudioUIState(state, message = '') {
+    const playBtn = document.getElementById('playAudioBtn');
+    const playIcon = document.getElementById('playIcon');
+    const audioStatus = document.getElementById('audioStatus');
+
+    if (!playBtn || !playIcon || !audioStatus) return;
+
+    if (state === 'loading') {
+        playBtn.disabled = true;
+        playIcon.innerHTML = '<span class="audio-spinner"></span>';
+        audioStatus.className = 'audio-status';
+        audioStatus.textContent = message || `Loading ${activeInstrument === 'piano' ? 'Concert Piano HD' : 'Acoustic Guitar HD'}...`;
+    } else if (state === 'ready') {
+        playBtn.disabled = false;
+        playIcon.textContent = '▶';
+        audioStatus.className = 'audio-status ready';
+        audioStatus.textContent = message || `HD ${activeInstrument === 'piano' ? 'Grand Piano' : 'Nylon Guitar'} Ready • Tap to Play`;
+    } else if (state === 'playing') {
+        playBtn.disabled = false;
+        playIcon.textContent = '⏸';
+        audioStatus.className = 'audio-status ready';
+        audioStatus.textContent = message || `Playing ${activeInstrument === 'piano' ? 'Concert Piano' : 'Acoustic Guitar'} HD...`;
+    } else if (state === 'error') {
+        playBtn.disabled = true;
+        playIcon.textContent = '✕';
+        audioStatus.className = 'audio-status';
+        audioStatus.textContent = message || 'Audio playback unavailable';
+    }
+}
+
+/**
+ * High-Performance Soundfont Loader with Deduplicated Promises and Memory Caching
+ */
+function loadInstrumentFast(type) {
+    if (soundfontCache[type]) {
+        return Promise.resolve(soundfontCache[type]);
+    }
+
+    if (loadPromises[type]) {
+        return loadPromises[type];
+    }
+
     const ctx = getAudioContext();
     const instName = type === 'piano' ? 'acoustic_grand_piano' : 'acoustic_guitar_nylon';
 
-    if (soundfontCache[type]) {
-        return soundfontCache[type];
-    }
-
-    const audioStatus = document.getElementById('audioStatus');
-    if (audioStatus) audioStatus.textContent = `Loading Concert ${type.toUpperCase()} HD Audio...`;
-
-    try {
-        const instrument = await Soundfont.instrument(ctx, instName, {
-            soundfont: 'FluidR3_GM',
-            gain: 2.5
-        });
+    loadPromises[type] = Soundfont.instrument(ctx, instName, {
+        soundfont: 'FluidR3_GM',
+        gain: 2.2
+    }).then(instrument => {
         soundfontCache[type] = instrument;
+        console.log(`[Tazaro Audio Engine] Cached: ${type}`);
         return instrument;
-    } catch (e) {
-        console.warn(`Soundfont load fallback for ${type}:`, e);
+    }).catch(err => {
+        console.warn(`[Tazaro Audio Engine] Failed loading ${type}:`, err);
+        loadPromises[type] = null;
         return null;
+    });
+
+    return loadPromises[type];
+}
+
+/**
+ * Warm up audio soundfonts in the background so they are instant upon modal click
+ */
+function prewarmAudioEngine() {
+    // Warm up piano first during idle period
+    if ('requestIdleCallback' in window) {
+        requestIdleCallback(() => {
+            loadInstrumentFast('piano');
+        });
+    } else {
+        setTimeout(() => {
+            loadInstrumentFast('piano');
+        }, 1200);
     }
 }
 
@@ -169,6 +223,7 @@ async function fetchDynamicInventory() {
         masterCatalog = processDiscoveredFiles(discoveredFiles);
         updateFilterCounts(masterCatalog);
         applyFiltersAndSearch();
+        prewarmAudioEngine();
     } else {
         grid.innerHTML = '';
         document.getElementById('emptyState').style.display = 'block';
@@ -330,6 +385,15 @@ function renderCatalog(items) {
                 <span class="action-link">Preview & Play →</span>
             </div>
         `;
+
+        // Pre-warm guitar soundfont on card hover/touch
+        card.addEventListener('mouseenter', () => {
+            loadInstrumentFast('guitar');
+        });
+        card.addEventListener('touchstart', () => {
+            loadInstrumentFast('guitar');
+        }, { passive: true });
+
         card.addEventListener('click', () => openPreviewModal(song));
         songGrid.appendChild(card);
     });
@@ -392,12 +456,10 @@ async function renderSecureFirstPage(pdfUrl) {
 }
 
 /* =======================================================================
- * 7. HD SOUNDFONT NATIVE AUDIO ENGINE (SMOOTH & ZERO LAG)
+ * 7. HD SOUNDFONT PLAYBACK ENGINE
  * ======================================================================= */
 
 const playBtn = document.getElementById('playAudioBtn');
-const playIcon = document.getElementById('playIcon');
-const audioStatus = document.getElementById('audioStatus');
 const audioProgress = document.getElementById('audioProgress');
 
 async function toggleAudioPlayback() {
@@ -408,15 +470,13 @@ async function toggleAudioPlayback() {
         return;
     }
 
-    playIcon.textContent = '⏳';
-    audioStatus.textContent = `Preparing HD ${activeInstrument.toUpperCase()} Concert Audio...`;
-
-    const player = await loadInstrument(activeInstrument);
+    const player = soundfontCache[activeInstrument];
     if (!player) {
-        audioStatus.textContent = "Audio engine unavailable";
-        playIcon.textContent = '▶';
+        setAudioUIState('loading');
         return;
     }
+
+    setAudioUIState('playing');
 
     const currentMidiFile = currentSong?.instruments?.[activeInstrument]?.mid;
 
@@ -427,19 +487,17 @@ async function toggleAudioPlayback() {
                 const arrayBuffer = await response.arrayBuffer();
                 const midi = new Midi(arrayBuffer);
 
-                stopAudioPlayback(); // Clean any previous queue
+                stopAudioPlayback(false); // Clean previous notes without changing UI to paused
                 isPlaying = true;
-                playIcon.textContent = '⏸';
-                audioStatus.textContent = `Playing ${activeInstrument === 'piano' ? 'Grand Piano HD' : 'Classical Guitar HD'}...`;
+                setAudioUIState('playing', `Playing ${activeInstrument === 'piano' ? 'Concert Grand' : 'Acoustic Guitar'} HD...`);
 
-                const now = ctx.currentTime + 0.1;
+                const now = ctx.currentTime + 0.08;
                 playbackStartTime = now;
-                currentTrackDuration = Math.min(midi.duration || 30, 45); // Preview length capped to 45s
+                currentTrackDuration = Math.min(midi.duration || 30, 45);
 
-                // Play notes with native audio buffer scheduling
                 midi.tracks.forEach(track => {
                     track.notes.forEach(note => {
-                        if (note.time < 45) { // Schedule preview portion only
+                        if (note.time < 45) {
                             const scheduledNode = player.play(
                                 note.name, 
                                 now + note.time, 
@@ -457,17 +515,16 @@ async function toggleAudioPlayback() {
                 return;
             }
         } catch (e) {
-            console.warn('MIDI direct stream fallback to acoustic demo progression:', e);
+            console.warn('MIDI direct stream fallback triggered:', e);
         }
     }
 
-    // High-Fidelity Acoustic Demo Progression Fallback
-    stopAudioPlayback();
+    // Fallback: Harmonic progression
+    stopAudioPlayback(false);
     isPlaying = true;
-    playIcon.textContent = '⏸';
-    audioStatus.textContent = `Playing ${activeInstrument === 'piano' ? 'Concert Grand HD' : 'Acoustic Guitar HD'}...`;
+    setAudioUIState('playing', `Playing ${activeInstrument === 'piano' ? 'Concert Grand' : 'Acoustic Guitar'} HD...`);
 
-    const now = ctx.currentTime + 0.1;
+    const now = ctx.currentTime + 0.08;
     playbackStartTime = now;
     currentTrackDuration = 8.0;
 
@@ -490,13 +547,14 @@ async function toggleAudioPlayback() {
     startProgressTracker();
 }
 
-function stopAudioPlayback() {
+function stopAudioPlayback(resetUI = true) {
     isPlaying = false;
-    playIcon.textContent = '▶';
-    audioStatus.textContent = 'Playback Paused';
-    audioProgress.style.width = '0%';
+    
+    if (resetUI) {
+        setAudioUIState('ready', `HD ${activeInstrument === 'piano' ? 'Grand Piano' : 'Nylon Guitar'} Ready • Tap to Play`);
+        audioProgress.style.width = '0%';
+    }
 
-    // Cancel and stop all currently active or queued sound nodes
     if (activeAudioNodes && activeAudioNodes.length > 0) {
         activeAudioNodes.forEach(node => {
             try { 
@@ -521,8 +579,8 @@ function startProgressTracker() {
         audioProgress.style.width = `${progress}%`;
 
         if (elapsed >= currentTrackDuration) {
-            stopAudioPlayback();
-            audioStatus.textContent = 'Preview Complete';
+            stopAudioPlayback(true);
+            setAudioUIState('ready', 'Preview Complete • Tap to Replay');
             return;
         }
 
@@ -558,9 +616,6 @@ function openPreviewModal(song) {
     configurePricingOptions(song);
     updateModalView();
     modal.classList.add('active');
-
-    // Preload instrument soundfont quietly in background
-    loadInstrument(activeInstrument);
 }
 
 function configurePricingOptions(song) {
@@ -584,21 +639,38 @@ function configurePricingOptions(song) {
     }
 }
 
+/**
+ * Handles tab switching, stopping any active audio, locking the button
+ * if the instrument is loading, and auto-enabling when ready.
+ */
 function updateModalView() {
     tabPiano.classList.toggle('active', activeInstrument === 'piano');
     tabGuitar.classList.toggle('active', activeInstrument === 'guitar');
 
-    if (isPlaying) stopAudioPlayback();
+    if (isPlaying) stopAudioPlayback(true);
 
     const pdfPath = currentSong.instruments[activeInstrument].pdf;
     renderSecureFirstPage(pdfPath);
+
+    // Instrument Soundfont Loading & Auto-Enable State Management
+    if (soundfontCache[activeInstrument]) {
+        // Already loaded: Instant auto-ready!
+        setAudioUIState('ready');
+    } else {
+        // Disabled & Loading: Auto-enables as soon as promise resolves
+        setAudioUIState('loading');
+        loadInstrumentFast(activeInstrument).then(player => {
+            if (player && modal.classList.contains('active')) {
+                setAudioUIState('ready');
+            }
+        });
+    }
 }
 
 tabPiano.addEventListener('click', () => { 
     if (activeInstrument !== 'piano') { 
         activeInstrument = 'piano'; 
         updateModalView(); 
-        loadInstrument('piano');
     } 
 });
 
@@ -606,19 +678,18 @@ tabGuitar.addEventListener('click', () => {
     if (activeInstrument !== 'guitar') { 
         activeInstrument = 'guitar'; 
         updateModalView(); 
-        loadInstrument('guitar');
     } 
 });
 
 modalCloseBtn.addEventListener('click', () => {
     modal.classList.remove('active');
-    if (isPlaying) stopAudioPlayback();
+    if (isPlaying) stopAudioPlayback(true);
 });
 
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && modal.classList.contains('active')) {
         modal.classList.remove('active');
-        if (isPlaying) stopAudioPlayback();
+        if (isPlaying) stopAudioPlayback(true);
     }
 });
 
