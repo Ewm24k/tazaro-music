@@ -7,14 +7,15 @@
     
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- PDF.js Engine (Client-side Page 1 Rendering) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <!-- Tone.js & MIDI Player Engines -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- MIDI Parser Engine -->
     <script src="https://cdn.jsdelivr.net/npm/@tonejs/midi"></script>
+    <!-- Soundfont HD Audio Engine (Steinway Grand & Nylon Guitar) -->
+    <script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.min.js"></script>
     
     <link rel="stylesheet" href="style.css">
 </head>
@@ -91,7 +92,7 @@
         </div>
     </main>
 
-    <!-- MODAL: Sheet Inspection, Retina Page-1 Preview & Audio Engine -->
+    <!-- MODAL: Sheet Inspection, Retina Page-1 Preview & HD Audio Engine -->
     <div class="modal-overlay" id="previewModal">
         <div class="modal-card">
             <button class="modal-close" id="modalCloseBtn" aria-label="Close Preview">&times;</button>
@@ -121,14 +122,14 @@
                         <p class="format-chips">Included: <span>.PDF</span> <span>.MusicXML</span> <span>.MID</span></p>
                     </div>
 
-                    <!-- Synthesized Audio Player -->
+                    <!-- HD Audio Player Box -->
                     <div class="audio-player-box">
                         <div class="audio-ui">
                             <button id="playAudioBtn" class="play-btn" aria-label="Play Sample Preview">
                                 <span id="playIcon">▶</span>
                             </button>
                             <div class="audio-track-info">
-                                <span class="audio-status" id="audioStatus">Preview Audio Ready</span>
+                                <span class="audio-status" id="audioStatus">HD Concert Audio Ready</span>
                                 <div class="audio-progress-bar">
                                     <div class="audio-progress-fill" id="audioProgress"></div>
                                 </div>
