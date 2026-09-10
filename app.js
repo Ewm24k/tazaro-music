@@ -3,14 +3,14 @@
  * TAZARO MUSIC SHEET — CORE PLATFORM ENGINE
  * =======================================================================
  * Features:
- * 1. Resilient Directory Discovery (Netlify Functions -> Manifest -> PHP)
- * 2. Automated File Consolidation (3 formats x 2 instruments -> 1 Product)
- * 3. Secure Retina / High-DPI Page-1 PDF Rendering Engine (PDF.js)
- * 4. Interactive Synthesis Audio Player (Tone.js + @tonejs/midi)
- * 5. Dynamic Dual-Tier Pricing Selector (RM 5 Solo / RM 10 Bundle)
- * 6. Native Android & iOS Adaptive UI Engine
- * 7. ToyyibPay Gateway Integration Hook
- * 8. Dynamic Netlify Watermark Killer
+ * 1. Animated Editorial Hero Carousel
+ * 2. Real-Time Fuzzy Search & Category Chip Filtering Engine
+ * 3. Multi-Tier File Discovery (Netlify Function -> Manifest -> PHP)
+ * 4. Retina High-DPI Page-1 PDF Rendering Sandbox (PDF.js)
+ * 5. Synthesized Tone.js MIDI Playback Engine
+ * 6. Dynamic Dual-Tier Pricing Model (RM 5 Solo / RM 10 Bundle)
+ * 7. ToyyibPay Secure API Payment Bridge Hook
+ * 8. Netlify Badge Auto-Remover Mutation Observer
  * =======================================================================
  */
 
@@ -18,15 +18,50 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 // Global Engine State
-let catalog = [];
+let masterCatalog = [];
+let filteredCatalog = [];
 let currentSong = null;
 let activeInstrument = 'piano';
+let activeFilter = 'all';
+let searchQuery = '';
+
+// Audio Engine State
 let isPlaying = false;
 let synth = null;
 let activeMidiPart = null;
 
 /* =======================================================================
- * 1. DYNAMIC FILE DISCOVERY & GROUPING ENGINE
+ * 1. ANIMATED HERO KEYWORD CAROUSEL
+ * ======================================================================= */
+
+const audienceKeywords = [
+    "Virtuoso Pianists",
+    "Fingerstyle Guitarists",
+    "Concert Soloists",
+    "Classical Arrangers",
+    "Modern Performers"
+];
+let currentKeywordIndex = 0;
+
+function initHeaderCarousel() {
+    const textEl = document.getElementById('carouselText');
+    if (!textEl) return;
+
+    setInterval(() => {
+        textEl.classList.remove('fade-in');
+        textEl.classList.add('fade-out');
+
+        setTimeout(() => {
+            currentKeywordIndex = (currentKeywordIndex + 1) % audienceKeywords.length;
+            textEl.textContent = audienceKeywords[currentKeywordIndex];
+            textEl.classList.remove('fade-out');
+            textEl.classList.add('fade-in');
+        }, 300);
+    }, 3200);
+}
+
+/* =======================================================================
+ * 2. DYNAMIC INVENTORY FETCHING & NORMALIZATION
  * ======================================================================= */
 
 function generateSlug(filename) {
@@ -67,24 +102,23 @@ async function fetchDynamicInventory() {
                 const data = await response.json();
                 if (Array.isArray(data) && data.length > 0) {
                     discoveredFiles = data;
-                    console.log(`[Tazaro Engine] Inventory loaded via: ${endpoint}`);
+                    console.log(`[Tazaro Engine] Archive verified via: ${endpoint}`);
                     break;
                 }
             }
         } catch (e) {
-            // Silently try next fallback endpoint
+            // Silently cascade to next fallback
         }
     }
 
     if (discoveredFiles && discoveredFiles.length > 0) {
-        catalog = processDiscoveredFiles(discoveredFiles);
-        renderCatalog(catalog);
+        masterCatalog = processDiscoveredFiles(discoveredFiles);
+        updateFilterCounts(masterCatalog);
+        applyFiltersAndSearch();
     } else {
-        grid.innerHTML = `
-            <div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 4rem 1rem;">
-                <p style="font-size: 1.1rem; color: #fff; margin-bottom: 0.5rem;">No Sheet Music Files Detected</p>
-                <p style="font-size: 0.85rem;">Upload your files to <code>sheet/piano/</code> and <code>sheet/guitar/</code> to populate the catalog.</p>
-            </div>`;
+        grid.innerHTML = '';
+        document.getElementById('emptyState').style.display = 'block';
+        document.getElementById('catalogResultsCount').textContent = '0 masterpieces available';
     }
 }
 
@@ -126,31 +160,122 @@ function processDiscoveredFiles(filePaths) {
 }
 
 /* =======================================================================
- * 2. CATALOG RENDERER
+ * 3. SEARCH & GALLERY FILTER ENGINE
+ * ======================================================================= */
+
+function updateFilterCounts(items) {
+    const total = items.length;
+    const pianoCount = items.filter(s => !!s.instruments.piano.pdf).length;
+    const guitarCount = items.filter(s => !!s.instruments.guitar.pdf).length;
+    const bothCount = items.filter(s => !!s.instruments.piano.pdf && !!s.instruments.guitar.pdf).length;
+
+    document.getElementById('countAll').textContent = total;
+    document.getElementById('countPiano').textContent = pianoCount;
+    document.getElementById('countGuitar').textContent = guitarCount;
+    document.getElementById('countBoth').textContent = bothCount;
+}
+
+function applyFiltersAndSearch() {
+    const query = searchQuery.trim().toLowerCase();
+
+    filteredCatalog = masterCatalog.filter(song => {
+        const matchesQuery = song.title.toLowerCase().includes(query) || song.slug.includes(query);
+        const hasPiano = !!song.instruments.piano.pdf;
+        const hasGuitar = !!song.instruments.guitar.pdf;
+
+        let matchesChip = true;
+        if (activeFilter === 'piano') matchesChip = hasPiano;
+        else if (activeFilter === 'guitar') matchesChip = hasGuitar;
+        else if (activeFilter === 'both') matchesChip = hasPiano && hasGuitar;
+
+        return matchesQuery && matchesChip;
+    });
+
+    renderCatalog(filteredCatalog);
+}
+
+// Live Search Input Event
+const searchInput = document.getElementById('searchInput');
+const searchClearBtn = document.getElementById('searchClear');
+
+searchInput.addEventListener('input', (e) => {
+    searchQuery = e.target.value;
+    searchClearBtn.style.display = searchQuery.length > 0 ? 'block' : 'none';
+    applyFiltersAndSearch();
+});
+
+searchClearBtn.addEventListener('click', () => {
+    searchInput.value = '';
+    searchQuery = '';
+    searchClearBtn.style.display = 'none';
+    searchInput.focus();
+    applyFiltersAndSearch();
+});
+
+// Category Filter Chips Events
+const chips = document.querySelectorAll('.chip');
+chips.forEach(chip => {
+    chip.addEventListener('click', () => {
+        chips.forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        activeFilter = chip.getAttribute('data-filter');
+        applyFiltersAndSearch();
+    });
+});
+
+document.getElementById('resetFilterBtn').addEventListener('click', () => {
+    searchInput.value = '';
+    searchQuery = '';
+    searchClearBtn.style.display = 'none';
+    chips.forEach(c => c.classList.remove('active'));
+    document.querySelector('.chip[data-filter="all"]').classList.add('active');
+    activeFilter = 'all';
+    applyFiltersAndSearch();
+});
+
+/* =======================================================================
+ * 4. CATALOG GRID RENDERER
  * ======================================================================= */
 
 function renderCatalog(items) {
     const songGrid = document.getElementById('songGrid');
+    const emptyState = document.getElementById('emptyState');
+    const statusLabel = document.getElementById('catalogResultsCount');
+
     songGrid.innerHTML = '';
+    statusLabel.textContent = `Showing ${items.length} of ${masterCatalog.length} transcriptions`;
+
+    if (items.length === 0) {
+        emptyState.style.display = 'block';
+        return;
+    } else {
+        emptyState.style.display = 'none';
+    }
 
     items.forEach(song => {
         const hasPiano = !!song.instruments.piano.pdf;
         const hasGuitar = !!song.instruments.guitar.pdf;
+        const isBundle = hasPiano && hasGuitar;
 
         const card = document.createElement('div');
         card.className = 'song-card';
         card.innerHTML = `
-            <div class="card-header">
-                <div class="card-badges">
-                    ${hasPiano ? '<span class="card-badge">Piano Score</span>' : ''}
-                    ${hasGuitar ? '<span class="card-badge">Guitar Tabs & Score</span>' : ''}
-                </div>
-                <h3>${song.title}</h3>
-                <p style="color:var(--text-muted); font-size:0.85rem;">Includes Verified PDF, MusicXML & MIDI Formats</p>
+            <div class="card-art-motif">
+                <span class="motif-symbol">${hasPiano ? '𝄞' : '𝄢'}</span>
+                <span class="motif-format-badge">PDF • XML • MID</span>
             </div>
+
+            <div class="card-badges">
+                ${hasPiano ? '<span class="badge-piano">Piano</span>' : ''}
+                ${hasGuitar ? '<span class="badge-guitar">Guitar Tabs</span>' : ''}
+            </div>
+
+            <h3>${song.title}</h3>
+            <p class="card-subtext">Concert Transcription with Performance Accompaniment</p>
+
             <div class="card-footer">
-                <span>${hasPiano && hasGuitar ? 'Bundle from <strong class="price-tag">RM 10.00</strong>' : 'Single Edition <strong class="price-tag">RM 5.00</strong>'}</span>
-                <span style="color: var(--accent-brass); font-weight:600;">Preview & Audio →</span>
+                <span class="price-pill">${isBundle ? 'RM 10.00 Bundle' : 'RM 5.00 Solo'}</span>
+                <span class="action-link">Preview & Play →</span>
             </div>
         `;
         card.addEventListener('click', () => openPreviewModal(song));
@@ -159,7 +284,7 @@ function renderCatalog(items) {
 }
 
 /* =======================================================================
- * 3. RETINA / HIGH-DPI PAGE-1 PREVIEW ENGINE
+ * 5. RETINA HIGH-DPI PAGE-1 PDF PREVIEW ENGINE
  * ======================================================================= */
 
 async function renderSecureFirstPage(pdfUrl) {
@@ -167,14 +292,14 @@ async function renderSecureFirstPage(pdfUrl) {
     const ctx = canvas.getContext('2d');
 
     if (!pdfUrl) {
-        canvas.width = 320;
-        canvas.height = 440;
-        ctx.fillStyle = "#121519";
+        canvas.width = 340;
+        canvas.height = 460;
+        ctx.fillStyle = "#121722";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "#8E95A0";
+        ctx.fillStyle = "#94A3B8";
         ctx.font = "14px 'Plus Jakarta Sans', sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText("Edition unavailable for this instrument.", canvas.width / 2, canvas.height / 2);
+        ctx.fillText("Score unavailable for this instrument.", canvas.width / 2, canvas.height / 2);
         return;
     }
 
@@ -183,13 +308,12 @@ async function renderSecureFirstPage(pdfUrl) {
         const pdf = await loadingTask.promise;
         const page = await pdf.getPage(1);
 
-        // Responsive width calculation
         const isMobile = window.innerWidth <= 768;
         const baseViewport = page.getViewport({ scale: 1.0 });
-        const targetWidth = isMobile ? Math.min(window.innerWidth - 40, 420) : 520;
+        const targetWidth = isMobile ? Math.min(window.innerWidth - 36, 420) : 520;
         const scale = targetWidth / baseViewport.width;
 
-        // Device Pixel Ratio scaling for Retina displays (iPhone & AMOLED Android)
+        // Device Pixel Ratio scaling for Retina displays
         const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
         const viewport = page.getViewport({ scale: scale * dpr });
 
@@ -205,19 +329,19 @@ async function renderSecureFirstPage(pdfUrl) {
         await page.render(renderContext).promise;
     } catch (err) {
         console.warn('PDF render fallback mode applied.', err);
-        canvas.width = 320;
-        canvas.height = 450;
+        canvas.width = 340;
+        canvas.height = 460;
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "#161A20";
+        ctx.fillStyle = "#121722";
         ctx.font = "18px 'Cinzel', serif";
         ctx.textAlign = "center";
-        ctx.fillText(currentSong ? currentSong.title : "Preview", canvas.width / 2, 70);
+        ctx.fillText(currentSong ? currentSong.title : "Preview", canvas.width / 2, 80);
     }
 }
 
 /* =======================================================================
- * 4. SYNTHESIZED AUDIO PLAYER ENGINE (Tone.js)
+ * 6. SYNTHESIZED AUDIO PLAYER ENGINE (Tone.js)
  * ======================================================================= */
 
 const playBtn = document.getElementById('playAudioBtn');
@@ -244,7 +368,7 @@ async function toggleAudioPlayback() {
 
     if (currentMidiFile && window.Midi) {
         try {
-            audioStatus.textContent = 'Loading MIDI audio...';
+            audioStatus.textContent = 'Loading MIDI stream...';
             const response = await fetch(currentMidiFile);
             if (response.ok) {
                 const arrayBuffer = await response.arrayBuffer();
@@ -268,11 +392,11 @@ async function toggleAudioPlayback() {
                 return;
             }
         } catch (e) {
-            console.warn('MIDI direct stream fallback active.');
+            console.warn('MIDI stream fallback active.');
         }
     }
 
-    // Melodic Harmonic Preview Sequence
+    // Melodic Harmonic Sequence Fallback
     Tone.Transport.cancel();
     const chords = [
         { time: 0, notes: ["E3", "B3", "E4", "G4"] },
@@ -322,7 +446,7 @@ function startProgressBar(duration) {
 playBtn.addEventListener('click', toggleAudioPlayback);
 
 /* =======================================================================
- * 5. MODAL MANAGEMENT & INSTRUMENT PREVIEWS
+ * 7. MODAL MANAGEMENT & INSTRUMENT PREVIEWS
  * ======================================================================= */
 
 const modal = document.getElementById('previewModal');
@@ -406,7 +530,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 /* =======================================================================
- * 6. COMMERCE & TOYYIBPAY INTEGRATION
+ * 8. COMMERCE & TOYYIBPAY INTEGRATION
  * ======================================================================= */
 
 const priceOptions = document.querySelectorAll('.price-option');
@@ -469,7 +593,7 @@ function initiateToyyibpayCheckout({ songSlug, title, bundleType, amountRM }) {
 }
 
 /* =======================================================================
- * 7. NETLIFY WATERMARK DOM REMOVER
+ * 9. NETLIFY WATERMARK DOM REMOVER
  * ======================================================================= */
 
 const purgeNetlifyBadges = () => {
@@ -485,9 +609,10 @@ const badgeObserver = new MutationObserver(purgeNetlifyBadges);
 badgeObserver.observe(document.body, { childList: true, subtree: true });
 
 /* =======================================================================
- * 8. BOOT INITIALIZATION
+ * 10. BOOT INITIALIZATION
  * ======================================================================= */
 
 document.addEventListener('DOMContentLoaded', () => {
+    initHeaderCarousel();
     fetchDynamicInventory();
 });
