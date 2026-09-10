@@ -122,14 +122,16 @@
                         <p class="format-chips">Included: <span>.PDF</span> <span>.MusicXML</span> <span>.MID</span></p>
                     </div>
 
-                    <!-- HD Audio Player Box -->
+                    <!-- HD Audio Player Box with Smart Loading States -->
                     <div class="audio-player-box">
                         <div class="audio-ui">
-                            <button id="playAudioBtn" class="play-btn" aria-label="Play Sample Preview">
-                                <span id="playIcon">▶</span>
+                            <button id="playAudioBtn" class="play-btn" aria-label="Play Sample Preview" disabled>
+                                <span id="playIcon">
+                                    <span class="audio-spinner"></span>
+                                </span>
                             </button>
                             <div class="audio-track-info">
-                                <span class="audio-status" id="audioStatus">HD Concert Audio Ready</span>
+                                <span class="audio-status" id="audioStatus">Buffering HD Concert Audio...</span>
                                 <div class="audio-progress-bar">
                                     <div class="audio-progress-fill" id="audioProgress"></div>
                                 </div>
