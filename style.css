@@ -422,3 +422,21 @@ body {
     .preview-stage { height: 350px; }
     .navbar, .hero, .catalog-wrapper { padding-left: 1.5rem; padding-right: 1.5rem; }
 }
+/* ==========================================================
+   HIDE NETLIFY WATERMARK, BADGES & COLLABORATIVE DRAWER
+   ========================================================== */
+#netlify-badge,
+.netlify-badge,
+[data-netlify-deploy-id],
+div[id^="netlify-identity"],
+iframe#netlify-identity-widget,
+div[class*="netlify-drawer"],
+div[class*="feedback"],
+iframe[src*="netlify"],
+div[style*="position: fixed; bottom: 0"][style*="right: 0"] {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    z-index: -99999 !important;
+}
