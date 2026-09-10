@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tazaro Music Sheet | Masterpiece Transcriptions</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- PDF.js Library (Client-side Page 1 Rendering) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- Tone.js & Midi Player for interactive playback -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tonejs/midi"></script>
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Header / Branding -->
+    <header class="navbar">
+        <div class="brand">
+            <span class="logo-mark">𝄢</span>
+            <span class="logo-text">TAZARO</span>
+            <span class="logo-sub">MUSIC SHEET</span>
+        </div>
+        <div class="nav-metrics">
+            <span class="badge">Piano & Guitar Specialists</span>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <p class="eyebrow">CONCERT-GRADE TRANSCRIPTIONS</p>
+            <h1>Every Nuance. Fully Preserved.</h1>
+            <p class="hero-desc">Direct access to professional-grade notation, tablatures, and companion MIDI/MusicXML files for Piano and Classical/Acoustic Guitar.</p>
+        </div>
+    </section>
+
+    <!-- Main Music Catalog -->
+    <main class="catalog-wrapper">
+        <div class="catalog-controls">
+            <h2>Available Masterpieces</h2>
+            <div class="filter-indicators">
+                <span>Auto-grouped from: <code>/sheet/piano</code> & <code>/sheet/guitar</code></span>
+            </div>
+        </div>
+
+        <!-- Song Cards Container -->
+        <div class="song-grid" id="songGrid">
+            <!-- Dynamically populated via app.js -->
+        </div>
+    </main>
+
+    <!-- MODAL: Inspection, Page-1 Preview & Dual Audio Player -->
+    <div class="modal-overlay" id="previewModal">
+        <div class="modal-card">
+            <button class="modal-close" id="modalCloseBtn">&times;</button>
+            
+            <div class="modal-body">
+                <!-- Left: Sheet Preview (Strictly Page 1) -->
+                <div class="preview-stage">
+                    <div class="stage-nav">
+                        <button class="stage-tab active" data-target="piano" id="tabPiano">Piano Score</button>
+                        <button class="stage-tab" data-target="guitar" id="tabGuitar">Guitar Score</button>
+                    </div>
+
+                    <div class="canvas-viewport">
+                        <canvas id="sheetCanvas"></canvas>
+                        <div class="watermark-layer">
+                            <span>TAZARO PREVIEW ONLY</span>
+                            <small>Page 1 of Complete Score</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Info, Playback, and Pricing Engine -->
+                <div class="sheet-details">
+                    <div class="details-header">
+                        <span class="genre-tag" id="previewGenre">Classical Archive</span>
+                        <h3 id="previewTitle">Song Title</h3>
+                        <p class="format-chips">Included: <span>.PDF</span> <span>.MusicXML</span> <span>.MID</span></p>
+                    </div>
+
+                    <!-- Audio Preview Player -->
+                    <div class="audio-player-box">
+                        <div class="audio-ui">
+                            <button id="playAudioBtn" class="play-btn">
+                                <span id="playIcon">▶</span>
+                            </button>
+                            <div class="audio-track-info">
+                                <span class="audio-status" id="audioStatus">Synthesized Preview Ready</span>
+                                <div class="audio-progress-bar">
+                                    <div class="audio-progress-fill" id="audioProgress"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Purchase & Pricing Options (ToyyibPay Ready) -->
+                    <div class="checkout-selector">
+                        <h4>Select Acquisition Option</h4>
+
+                        <label class="price-option selected" data-bundle="both" data-price="10.00">
+                            <input type="radio" name="editionOption" value="both" checked>
+                            <div class="option-content">
+                                <span class="option-title">Concert Bundle (Piano + Guitar)</span>
+                                <span class="option-desc">All PDF, MIDI & XML files for both instruments</span>
+                            </div>
+                            <span class="option-price">RM 10</span>
+                        </label>
+
+                        <label class="price-option" data-bundle="piano" data-price="5.00">
+                            <input type="radio" name="editionOption" value="piano">
+                            <div class="option-content">
+                                <span class="option-title">Piano Edition Solo</span>
+                                <span class="option-desc">1x Piano PDF, MusicXML & MIDI</span>
+                            </div>
+                            <span class="option-price">RM 5</span>
+                        </label>
+
+                        <label class="price-option" data-bundle="guitar" data-price="5.00">
+                            <input type="radio" name="editionOption" value="guitar">
+                            <div class="option-content">
+                                <span class="option-title">Guitar Edition Solo</span>
+                                <span class="option-desc">1x Guitar PDF + Tabs, MusicXML & MIDI</span>
+                            </div>
+                            <span class="option-price">RM 5</span>
+                        </label>
+
+                        <button class="checkout-btn" id="toyyibpaySubmit">
+                            <span>Proceed to Secure Checkout</span>
+                            <strong id="dynamicPriceLabel">RM 10.00</strong>
+                        </button>
+                        <p class="secure-footer">Secured via ToyyibPay • Instant Digital Fulfillment</p>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
