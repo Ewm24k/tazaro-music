@@ -54,19 +54,21 @@
     <!-- Gallery & Catalog Showcase -->
     <main class="catalog-wrapper">
         
-        <!-- Gallery Navigation & Instant Filter Bar -->
+        <!-- Search & Category Filters (Optimized for Mobile & Desktop) -->
         <div class="gallery-toolbar">
             <div class="search-box">
                 <span class="search-icon">⚲</span>
-                <input type="text" id="searchInput" placeholder="Search piece, composer, or title..." autocomplete="off">
-                <button id="searchClear" class="search-clear" style="display:none;">&times;</button>
+                <input type="text" id="searchInput" placeholder="Search song title or composer..." autocomplete="off">
+                <button id="searchClear" class="search-clear" style="display:none;" aria-label="Clear Search">&times;</button>
             </div>
 
-            <div class="filter-chips">
-                <button class="chip active" data-filter="all">All Scores <span class="chip-count" id="countAll">0</span></button>
-                <button class="chip" data-filter="piano">Piano Solo <span class="chip-count" id="countPiano">0</span></button>
-                <button class="chip" data-filter="guitar">Guitar Tabs <span class="chip-count" id="countGuitar">0</span></button>
-                <button class="chip" data-filter="both">Bundle Deals <span class="chip-count" id="countBoth">0</span></button>
+            <div class="filter-chips-wrapper">
+                <div class="filter-chips">
+                    <button class="chip active" data-filter="all">All Scores <span class="chip-count" id="countAll">0</span></button>
+                    <button class="chip" data-filter="piano">Piano Solo <span class="chip-count" id="countPiano">0</span></button>
+                    <button class="chip" data-filter="guitar">Guitar Tabs <span class="chip-count" id="countGuitar">0</span></button>
+                    <button class="chip" data-filter="both">Bundle Deals <span class="chip-count" id="countBoth">0</span></button>
+                </div>
             </div>
         </div>
 
