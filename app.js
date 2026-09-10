@@ -17,22 +17,13 @@
  * 5. ToyyibPay Secure API Payment Bridge Hook
  * 6. Netlify Watermark DOM Killer
  *
- * AUDIO ENGINE PATCH NOTES (choke/lag fix, PC + Android + iOS):
- * - Added a master compressor/limiter bus so stacked notes/chords no longer
- *   clip and "choke" the output (previously all notes went straight to
- *   ctx.destination with no headroom management).
- * - Removed setTimeout-based scheduling for the WebAudioFont fallback path.
- *   setTimeout is not sample-accurate and drifts/throttles on mobile browsers
- *   (especially when the tab is backgrounded), which caused uneven, laggy
- *   playback. Notes are now scheduled directly against the AudioContext
- *   clock via playFallbackGuitarString(ctx, midi, when, ...).
- * - Added a simple polyphony cap (MAX_VOICES) per playback pass so dense
- *   MIDI files don't exceed the concurrent-voice ceiling mobile browsers
- *   silently enforce (which previously caused dropped/choked notes).
- * - Added a visibilitychange listener to resume the AudioContext when the
- *   tab/screen comes back from background/lock, since iOS Safari and
- *   Android Chrome aggressively suspend AudioContext in the background,
- *   which previously caused playback to silently die mid-track.
+ * AUDIO ENGINE ARCHITECTURE (FIXED LIFETIME VOICE COUNTER):
+ * - Fixed the bug where playback cut out after a few seconds. The polyphony
+ *   limiter now operates per concurrent time-slice (max overlapping notes
+ *   at once) instead of a lifetime counter that killed the track after 28 notes.
+ * - Master compressor/limiter bus prevents chord clipping on phone speakers.
+ * - Direct AudioContext clock scheduling (no drifting setTimeout).
+ * - Visibilitychange listener auto-resumes audio if mobile screen locks or tabs swap.
  * =======================================================================
  */
 
@@ -57,10 +48,9 @@ let playbackTimer = null;
 let playbackStartTime = 0;
 let currentTrackDuration = 0;
 
-// Polyphony safety ceiling — mobile browsers silently enforce a concurrent
-// active-node limit (roughly 32-64 depending on device); staying under it
-// prevents dropped/choked notes on dense MIDI passages.
-const MAX_VOICES = 28;
+// Maximum simultaneous notes permitted at the exact same moment (prevents
+// clipping and mobile audio thread choking while letting the song play continuously).
+const MAX_CONCURRENT_NOTES_PER_CHORD = 8;
 
 /* =======================================================================
  * 1. REAL INSTRUMENT SOUND ENGINE RESOLVER
@@ -71,9 +61,7 @@ function getAudioContext() {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         audioCtx = new AudioContextClass({ latencyHint: 'interactive' });
 
-        // Master bus: a gentle limiter/compressor so stacked notes and chords
-        // don't clip the output (previously this was the main cause of the
-        // "choke"/crackle heard during playback, worst on phone speakers).
+        // Master compressor/limiter bus: protects against speaker crackle on dense chords
         const compressor = audioCtx.createDynamicsCompressor();
         compressor.threshold.setValueAtTime(-6, audioCtx.currentTime);
         compressor.knee.setValueAtTime(12, audioCtx.currentTime);
@@ -87,7 +75,6 @@ function getAudioContext() {
         compressor.connect(masterGain);
         masterGain.connect(audioCtx.destination);
 
-        // All note sources route through this instead of ctx.destination.
         audioCtx.masterBus = compressor;
     }
     if (audioCtx.state === 'suspended') {
@@ -99,10 +86,7 @@ function getAudioContext() {
     return audioCtx;
 }
 
-// iOS Safari and Android Chrome aggressively suspend the AudioContext when
-// the screen locks or the tab is backgrounded. Without this, notes queued
-// after a suspend are silently dropped, which sounds like the track
-// stuttering or stopping partway through.
+// Auto-resume audio when returning from mobile background/lock screen
 document.addEventListener('visibilitychange', () => {
     if (!document.hidden && audioCtx && audioCtx.state === 'suspended') {
         audioCtx.resume();
@@ -152,8 +136,6 @@ function playFallbackGuitarString(ctx, midiNote, when, duration, velocity = 0.8)
     filter.frequency.exponentialRampToValueAtTime(Math.min(freq * 3.5, 900), when + 0.12);
 
     filter.connect(outGain);
-    // Route through the master compressor bus instead of straight to
-    // destination, so this voice can't contribute to output clipping.
     outGain.connect(ctx.masterBus || ctx.destination);
 
     const osc1 = ctx.createOscillator();
@@ -395,7 +377,7 @@ document.getElementById('resetFilterBtn').addEventListener('click', () => {
 });
 
 /* =======================================================================
- * 5. CATALOG GRID RENDERER (HANDLES CASES A, B, and C)
+ * 5. CATALOG GRID RENDERER (CASES A, B, and C)
  * ======================================================================= */
 
 function renderCatalog(items) {
@@ -418,13 +400,11 @@ function renderCatalog(items) {
         const hasGuitar = !!song.instruments.guitar.pdf;
         const hasBoth = hasPiano && hasGuitar;
 
-        // Build Availability Badges
         let badgeHTML = '';
         let subtextHTML = '';
         let priceTagHTML = '';
 
         if (hasBoth) {
-            // Case A: Both Piano and Guitar Available
             badgeHTML = `
                 <span class="badge-piano">Piano Score</span>
                 <span class="badge-guitar">Guitar Tabs</span>
@@ -432,7 +412,6 @@ function renderCatalog(items) {
             subtextHTML = 'Complete Score Bundle Available (Piano + Guitar Tabs)';
             priceTagHTML = 'RM 10.00 Bundle';
         } else if (hasGuitar && !hasPiano) {
-            // Case B: Only Guitar Available
             badgeHTML = `
                 <span class="badge-guitar">Guitar Exclusive</span>
                 <span class="badge-unavailable">Piano Score N/A</span>
@@ -440,7 +419,6 @@ function renderCatalog(items) {
             subtextHTML = 'Guitar Score & Tablature Edition (No Piano Transcription)';
             priceTagHTML = 'RM 5.00 Solo Edition';
         } else if (hasPiano && !hasGuitar) {
-            // Case C: Only Piano Available
             badgeHTML = `
                 <span class="badge-piano">Piano Exclusive</span>
                 <span class="badge-unavailable">Guitar Score N/A</span>
@@ -539,7 +517,7 @@ async function renderSecureFirstPage(pdfUrl) {
 }
 
 /* =======================================================================
- * 7. AUTHENTIC AUDIO CONTROLLER (PIANO & STEEL GUITAR)
+ * 7. AUTHENTIC AUDIO CONTROLLER (FULL CONTINUOUS PLAYBACK)
  * ======================================================================= */
 
 const playBtn = document.getElementById('playAudioBtn');
@@ -599,15 +577,21 @@ async function toggleAudioPlayback() {
 
                 const now = ctx.currentTime + 0.08;
                 playbackStartTime = now;
-                currentTrackDuration = Math.min(midi.duration || 30, 45);
+                currentTrackDuration = Math.min(midi.duration || 30, 45); // 45s continuous preview
 
-                let voiceCount = 0;
+                // True concurrent polyphony tracker: counts notes per narrow time window
+                // instead of an accumulated total that cuts off the song after a few seconds.
+                const timeSlotCounter = {};
 
                 midi.tracks.forEach(track => {
                     track.notes.forEach(note => {
                         if (note.time < 45) {
-                            if (voiceCount >= MAX_VOICES) return; // polyphony cap — avoid overloading mobile voice ceiling
-                            voiceCount++;
+                            // Group notes by 50ms time-slices to limit excessive chords
+                            const slotKey = Math.round(note.time * 20);
+                            timeSlotCounter[slotKey] = (timeSlotCounter[slotKey] || 0) + 1;
+                            if (timeSlotCounter[slotKey] > MAX_CONCURRENT_NOTES_PER_CHORD) {
+                                return; // caps concurrent voice density without killing the song
+                            }
 
                             const when = now + note.time;
                             const duration = Math.max(note.duration, 0.4);
@@ -624,8 +608,6 @@ async function toggleAudioPlayback() {
                                     volume
                                 );
                             } else if (isPlaying) {
-                                // Scheduled directly against the AudioContext clock —
-                                // no setTimeout, so no drift/throttle on mobile.
                                 playFallbackGuitarString(ctx, note.midi, when, duration, volume);
                             }
                         }
@@ -677,12 +659,7 @@ async function toggleAudioPlayback() {
         { time: 3.75, midi: 64, dur: 2.5, vel: 0.95 }
     ];
 
-    let demoVoiceCount = 0;
-
     demoNotes.forEach(n => {
-        if (demoVoiceCount >= MAX_VOICES) return; // polyphony cap
-        demoVoiceCount++;
-
         const when = now + n.time;
 
         if (preset && soundFontPlayer) {
@@ -696,7 +673,6 @@ async function toggleAudioPlayback() {
                 n.vel
             );
         } else if (isPlaying) {
-            // Scheduled directly against the AudioContext clock — no setTimeout drift.
             playFallbackGuitarString(ctx, n.midi, when, n.dur, n.vel);
         }
     });
@@ -768,16 +744,14 @@ function openPreviewModal(song) {
     const hasPiano = !!song.instruments.piano.pdf;
     const hasGuitar = !!song.instruments.guitar.pdf;
 
-    // Determine initial active instrument strictly based on what is available
     if (hasPiano && hasGuitar) {
-        activeInstrument = 'piano'; // default to piano if both exist
+        activeInstrument = 'piano';
     } else if (hasGuitar) {
-        activeInstrument = 'guitar'; // boot straight into guitar if piano missing
+        activeInstrument = 'guitar';
     } else {
-        activeInstrument = 'piano'; // boot into piano if guitar missing
+        activeInstrument = 'piano';
     }
 
-    // Update Tab Labels and Disabled states
     if (hasPiano) {
         tabPiano.classList.remove('disabled');
         tabPiano.textContent = "Piano Score";
@@ -794,21 +768,13 @@ function openPreviewModal(song) {
         tabGuitar.textContent = "Guitar Score (N/A)";
     }
 
-    // Configure Pricing Selectors Dynamically
     configurePricingOptions(song);
     updateModalView();
     modal.classList.add('active');
 
-    // Pre-warm audio in background
     primeInstrument(activeInstrument);
 }
 
-/**
- * Dynamically hides/shows checkout options based on available files:
- * - Case A (Both): Shows RM10 bundle (selected), RM5 piano, RM5 guitar.
- * - Case B (Guitar only): Hides RM10 bundle & RM5 piano. Auto-selects RM5 Guitar.
- * - Case C (Piano only): Hides RM10 bundle & RM5 guitar. Auto-selects RM5 Piano.
- */
 function configurePricingOptions(song) {
     const hasPiano = !!song.instruments.piano.pdf;
     const hasGuitar = !!song.instruments.guitar.pdf;
@@ -819,24 +785,21 @@ function configurePricingOptions(song) {
     const dynamicPriceLabel = document.getElementById('dynamicPriceLabel');
 
     if (hasPiano && hasGuitar) {
-        // Case A: Both Available
         optBundle.style.display = 'flex';
         optPiano.style.display = 'flex';
         optGuitar.style.display = 'flex';
-        optBundle.click(); // Selects RM 10 Bundle by default
+        optBundle.click();
     } else if (hasGuitar && !hasPiano) {
-        // Case B: Only Guitar Available
         optBundle.style.display = 'none';
         optPiano.style.display = 'none';
         optGuitar.style.display = 'flex';
-        optGuitar.click(); // Selects RM 5 Guitar Solo
+        optGuitar.click();
         dynamicPriceLabel.textContent = "RM 5.00";
     } else if (hasPiano && !hasGuitar) {
-        // Case C: Only Piano Available
         optBundle.style.display = 'none';
         optPiano.style.display = 'flex';
         optGuitar.style.display = 'none';
-        optPiano.click(); // Selects RM 5 Piano Solo
+        optPiano.click();
         dynamicPriceLabel.textContent = "RM 5.00";
     }
 }
@@ -853,7 +816,7 @@ function updateModalView() {
 }
 
 tabPiano.addEventListener('click', () => { 
-    if (!currentSong?.instruments?.piano?.pdf) return; // Ignore if missing
+    if (!currentSong?.instruments?.piano?.pdf) return;
     if (activeInstrument !== 'piano') { 
         activeInstrument = 'piano'; 
         updateModalView(); 
@@ -862,7 +825,7 @@ tabPiano.addEventListener('click', () => {
 });
 
 tabGuitar.addEventListener('click', () => { 
-    if (!currentSong?.instruments?.guitar?.pdf) return; // Ignore if missing
+    if (!currentSong?.instruments?.guitar?.pdf) return;
     if (activeInstrument !== 'guitar') { 
         activeInstrument = 'guitar'; 
         updateModalView(); 
