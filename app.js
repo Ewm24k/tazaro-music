@@ -2,20 +2,22 @@
  * =======================================================================
  * TAZARO MUSIC SHEET — CORE PLATFORM ENGINE
  * =======================================================================
- * Architecture:
+ * Features:
  * 1. Resilient Directory Discovery (Netlify Functions -> Manifest -> PHP)
  * 2. Automated File Consolidation (3 formats x 2 instruments -> 1 Product)
- * 3. Secure Page-1 PDF Rendering Engine (PDF.js + Canvas Sandbox)
- * 4. Interactive MIDI Synthesis Player (Tone.js + @tonejs/midi)
+ * 3. Secure Retina / High-DPI Page-1 PDF Rendering Engine (PDF.js)
+ * 4. Interactive Synthesis Audio Player (Tone.js + @tonejs/midi)
  * 5. Dynamic Dual-Tier Pricing Selector (RM 5 Solo / RM 10 Bundle)
- * 6. ToyyibPay Gateway Integration Hook
+ * 6. Native Android & iOS Adaptive UI Engine
+ * 7. ToyyibPay Gateway Integration Hook
+ * 8. Dynamic Netlify Watermark Killer
  * =======================================================================
  */
 
 // Initialize PDF.js Web Worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-// Global Runtime State
+// Global Engine State
 let catalog = [];
 let currentSong = null;
 let activeInstrument = 'piano';
@@ -24,13 +26,9 @@ let synth = null;
 let activeMidiPart = null;
 
 /* =======================================================================
- * 1. DYNAMIC FILE DISCOVERY & RECONCILIATION ENGINE
+ * 1. DYNAMIC FILE DISCOVERY & GROUPING ENGINE
  * ======================================================================= */
 
-/**
- * Normalizes any filename into a clean, uniform slug for grouping.
- * Example: "Canon_In_D.final.pdf" & "canon-in-d.mid" -> "canon-in-d"
- */
 function generateSlug(filename) {
     const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.'));
     return nameWithoutExt
@@ -40,10 +38,6 @@ function generateSlug(filename) {
         .replace(/^-|-$/g, '');
 }
 
-/**
- * Converts a sanitized slug into an editorial title.
- * Example: "moonlight-sonata" -> "Moonlight Sonata"
- */
 function cleanTitle(slug) {
     return slug
         .split('-')
@@ -51,12 +45,6 @@ function cleanTitle(slug) {
         .join(' ');
 }
 
-/**
- * Fetches directory inventory with progressive multi-environment fallback:
- * 1. Netlify Serverless Function (Production Netlify)
- * 2. Static manifest.json (Pre-rendered or local deployments)
- * 3. scan.php (Apache / cPanel / Shared Hosting)
- */
 async function fetchDynamicInventory() {
     const grid = document.getElementById('songGrid');
     grid.innerHTML = `
@@ -79,7 +67,7 @@ async function fetchDynamicInventory() {
                 const data = await response.json();
                 if (Array.isArray(data) && data.length > 0) {
                     discoveredFiles = data;
-                    console.log(`[Tazaro Engine] File list resolved via: ${endpoint}`);
+                    console.log(`[Tazaro Engine] Inventory loaded via: ${endpoint}`);
                     break;
                 }
             }
@@ -100,15 +88,10 @@ async function fetchDynamicInventory() {
     }
 }
 
-/**
- * Groups multiple physical files (.pdf, .musicxml, .mid) across
- * piano & guitar directories into a single product structure.
- */
 function processDiscoveredFiles(filePaths) {
     const registry = {};
 
     filePaths.forEach(path => {
-        // Expected format: sheet/{instrument}/{fileName}
         const segments = path.split('/');
         if (segments.length < 3) return;
 
@@ -176,20 +159,16 @@ function renderCatalog(items) {
 }
 
 /* =======================================================================
- * 3. SECURE PREVIEW ENGINE (STRICT PAGE-1 ONLY)
+ * 3. RETINA / HIGH-DPI PAGE-1 PREVIEW ENGINE
  * ======================================================================= */
 
-/**
- * Loads the PDF and renders exclusively Page 1 to an isolated canvas.
- * Higher pages are never loaded into the DOM, preventing complete scraping.
- */
 async function renderSecureFirstPage(pdfUrl) {
     const canvas = document.getElementById('sheetCanvas');
     const ctx = canvas.getContext('2d');
 
     if (!pdfUrl) {
-        canvas.width = 450;
-        canvas.height = 600;
+        canvas.width = 320;
+        canvas.height = 440;
         ctx.fillStyle = "#121519";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#8E95A0";
@@ -202,13 +181,22 @@ async function renderSecureFirstPage(pdfUrl) {
     try {
         const loadingTask = pdfjsLib.getDocument(pdfUrl);
         const pdf = await loadingTask.promise;
-
-        // Security boundary: Request Page 1 only
         const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 1.4 });
 
-        canvas.height = viewport.height;
+        // Responsive width calculation
+        const isMobile = window.innerWidth <= 768;
+        const baseViewport = page.getViewport({ scale: 1.0 });
+        const targetWidth = isMobile ? Math.min(window.innerWidth - 40, 420) : 520;
+        const scale = targetWidth / baseViewport.width;
+
+        // Device Pixel Ratio scaling for Retina displays (iPhone & AMOLED Android)
+        const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+        const viewport = page.getViewport({ scale: scale * dpr });
+
         canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.style.width = `${viewport.width / dpr}px`;
+        canvas.style.height = `${viewport.height / dpr}px`;
 
         const renderContext = {
             canvasContext: ctx,
@@ -216,33 +204,20 @@ async function renderSecureFirstPage(pdfUrl) {
         };
         await page.render(renderContext).promise;
     } catch (err) {
-        console.warn('PDF.js render notice: File inaccessible or local cross-origin constraint.', err);
-        // Fallback display canvas
-        canvas.width = 450;
-        canvas.height = 600;
+        console.warn('PDF render fallback mode applied.', err);
+        canvas.width = 320;
+        canvas.height = 450;
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#161A20";
-        ctx.font = "22px 'Cinzel', serif";
+        ctx.font = "18px 'Cinzel', serif";
         ctx.textAlign = "center";
-        ctx.fillText(currentSong.title, canvas.width / 2, 80);
-        ctx.font = "12px 'Plus Jakarta Sans', sans-serif";
-        ctx.fillStyle = "#8E95A0";
-        ctx.fillText(`PREVIEW - ${activeInstrument.toUpperCase()} EDITION`, canvas.width / 2, 110);
-        
-        ctx.strokeStyle = "#e1e4e8";
-        ctx.lineWidth = 1.5;
-        for (let y = 160; y <= 500; y += 45) {
-            ctx.beginPath();
-            ctx.moveTo(40, y);
-            ctx.lineTo(410, y);
-            ctx.stroke();
-        }
+        ctx.fillText(currentSong ? currentSong.title : "Preview", canvas.width / 2, 70);
     }
 }
 
 /* =======================================================================
- * 4. SYNTHESIZED AUDIO PLAYER (Tone.js + MIDI Hook)
+ * 4. SYNTHESIZED AUDIO PLAYER ENGINE (Tone.js)
  * ======================================================================= */
 
 const playBtn = document.getElementById('playAudioBtn');
@@ -260,7 +235,6 @@ async function toggleAudioPlayback() {
 
     const currentMidiFile = currentSong.instruments[activeInstrument].mid;
 
-    // Initialize Polyphonic Synth
     if (!synth) {
         synth = new Tone.PolySynth(Tone.Synth, {
             oscillator: { type: "triangle" },
@@ -268,10 +242,9 @@ async function toggleAudioPlayback() {
         }).toDestination();
     }
 
-    // Direct MIDI file parsing if accessible
     if (currentMidiFile && window.Midi) {
         try {
-            audioStatus.textContent = 'Loading MIDI stream...';
+            audioStatus.textContent = 'Loading MIDI audio...';
             const response = await fetch(currentMidiFile);
             if (response.ok) {
                 const arrayBuffer = await response.arrayBuffer();
@@ -295,11 +268,11 @@ async function toggleAudioPlayback() {
                 return;
             }
         } catch (e) {
-            console.warn('MIDI playback falling back to synthesized preview sequence.');
+            console.warn('MIDI direct stream fallback active.');
         }
     }
 
-    // High-Fidelity Harmonic Fallback Sequence
+    // Melodic Harmonic Preview Sequence
     Tone.Transport.cancel();
     const chords = [
         { time: 0, notes: ["E3", "B3", "E4", "G4"] },
@@ -318,7 +291,7 @@ async function toggleAudioPlayback() {
     Tone.Transport.start();
     isPlaying = true;
     playIcon.textContent = '⏸';
-    audioStatus.textContent = `Playing ${activeInstrument.toUpperCase()} Audio Preview...`;
+    audioStatus.textContent = `Playing ${activeInstrument.toUpperCase()} Preview...`;
     startProgressBar(4.8);
 }
 
@@ -349,7 +322,7 @@ function startProgressBar(duration) {
 playBtn.addEventListener('click', toggleAudioPlayback);
 
 /* =======================================================================
- * 5. MODAL MANAGEMENT & DUAL INSTRUMENT PREVIEW
+ * 5. MODAL MANAGEMENT & INSTRUMENT PREVIEWS
  * ======================================================================= */
 
 const modal = document.getElementById('previewModal');
@@ -361,14 +334,12 @@ function openPreviewModal(song) {
     currentSong = song;
     document.getElementById('previewTitle').innerText = song.title;
 
-    // Set initial instrument based on availability
     if (song.instruments.piano.pdf) {
         activeInstrument = 'piano';
     } else {
         activeInstrument = 'guitar';
     }
 
-    // Toggle tab visibility depending on files detected
     tabPiano.style.display = song.instruments.piano.pdf ? 'block' : 'none';
     tabGuitar.style.display = song.instruments.guitar.pdf ? 'block' : 'none';
 
@@ -389,7 +360,6 @@ function configurePricingOptions(song) {
     pianoOpt.style.display = hasPiano ? 'flex' : 'none';
     guitarOpt.style.display = hasGuitar ? 'flex' : 'none';
 
-    // Auto-select primary deal
     if (hasPiano && hasGuitar) {
         bothOpt.click();
     } else if (hasPiano) {
@@ -428,7 +398,6 @@ modalCloseBtn.addEventListener('click', () => {
     if (isPlaying) stopAudioPlayback();
 });
 
-// Close modal on escape key
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && modal.classList.contains('active')) {
         modal.classList.remove('active');
@@ -437,7 +406,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 /* =======================================================================
- * 6. COMMERCE: PRICING LOGIC & TOYYIBPAY INTEGRATION HOOK
+ * 6. COMMERCE & TOYYIBPAY INTEGRATION
  * ======================================================================= */
 
 const priceOptions = document.querySelectorAll('.price-option');
@@ -470,16 +439,11 @@ document.getElementById('toyyibpaySubmit').addEventListener('click', () => {
     });
 });
 
-/**
- * ToyyibPay Execution Bridge
- * Translates checkout state into ToyyibPay specification parameters.
- */
 function initiateToyyibpayCheckout({ songSlug, title, bundleType, amountRM }) {
-    // ToyyibPay requires integer values in Malaysian Cents (e.g. RM 10.00 = 1000)
     const amountInCents = Math.round(parseFloat(amountRM) * 100).toString();
 
     const toyyibpayPayload = {
-        userSecretKey: "YOUR_TOYYIBPAY_USER_SECRET_KEY", // Configure in server-side handler
+        userSecretKey: "YOUR_TOYYIBPAY_USER_SECRET_KEY",
         categoryCode: "YOUR_TOYYIBPAY_CATEGORY_CODE",
         billName: `Tazaro: ${title.substring(0, 30)}`,
         billDescription: `Score Bundle: ${bundleType.toUpperCase()} (PDF, MusicXML, MIDI)`,
@@ -493,39 +457,37 @@ function initiateToyyibpayCheckout({ songSlug, title, bundleType, amountRM }) {
 
     console.log("[ToyyibPay Request Prepared]:", toyyibpayPayload);
 
-    // Interactive confirmation modal / alert
     alert(
         `[ToyyibPay Secure Checkout]\n` +
         `-----------------------------------------\n` +
         `Product: ${title}\n` +
         `Edition: ${bundleType.toUpperCase()}\n` +
         `Total Payable: RM ${amountRM}\n` +
-        `Bill Amount (Cents): ${amountInCents}\n\n` +
+        `Amount in Cents: ${amountInCents}\n\n` +
         `Redirecting to ToyyibPay Payment Gateway...`
     );
-
-    /**
-     * PRODUCTION INTEGRATION STEP:
-     * Forward this payload to your backend server or serverless function
-     * to prevent exposing your `userSecretKey`:
-     * 
-     * fetch('/.netlify/functions/create-bill', {
-     *     method: 'POST',
-     *     headers: { 'Content-Type': 'application/json' },
-     *     body: JSON.stringify(toyyibpayPayload)
-     * })
-     * .then(res => res.json())
-     * .then(data => {
-     *     if (data && data[0] && data[0].BillCode) {
-     *         window.location.href = `https://toyyibpay.com/${data[0].BillCode}`;
-     *     }
-     * });
-     */
 }
 
 /* =======================================================================
- * 7. BOOT INITIALIZATION
+ * 7. NETLIFY WATERMARK DOM REMOVER
  * ======================================================================= */
+
+const purgeNetlifyBadges = () => {
+    document.querySelectorAll('a[href*="netlify.com"], [class*="netlify"], [id*="netlify"]').forEach(el => {
+        if (!el.src && !el.href?.includes('/.netlify/functions')) {
+            el.remove();
+        }
+    });
+};
+
+purgeNetlifyBadges();
+const badgeObserver = new MutationObserver(purgeNetlifyBadges);
+badgeObserver.observe(document.body, { childList: true, subtree: true });
+
+/* =======================================================================
+ * 8. BOOT INITIALIZATION
+ * ======================================================================= */
+
 document.addEventListener('DOMContentLoaded', () => {
     fetchDynamicInventory();
 });
