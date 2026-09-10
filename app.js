@@ -3,15 +3,19 @@
  * TAZARO MUSIC SHEET — CORE PLATFORM ENGINE
  * =======================================================================
  * Features:
- * 1. Multi-Engine Authentic Instrument Architecture
+ * 1. Intelligent Asymmetric Upload Handling:
+ *    - Automatically detects when a piece is Piano-only, Guitar-only, or Both.
+ *    - Tags cards with clear badges (e.g., "Guitar Exclusive", "Piano N/A").
+ *    - Auto-locks and crosses out missing tabs inside the preview modal.
+ *    - Dynamically updates RM 10 Bundle / RM 5 Solo pricing so users only buy valid files.
+ * 2. Authentic Dual Instrument Soundbanks:
  *    - Piano: Real Yamaha/Steinway Concert Grand (_tone_0000_JCLive_sf2_file)
  *    - Guitar: Real Steel-String Acoustic Guitar (_tone_0250_JCLive_sf2_file)
- *              with Nylon Classical Backup (_tone_0240_JCLive_sf2_file)
- *    - Instant Fallback String Pluck Engine: Never hangs or stays loading
- * 2. High-DPI Retina Page-1 PDF Rendering Sandbox (PDF.js)
- * 3. Reactive Search & Category Chip Filter
- * 4. ToyyibPay Secure API Payment Bridge Hook
- * 5. Netlify Watermark DOM Killer
+ *              with Nylon backup (_tone_0240_JCLive_sf2_file) + Zero-Wait Pluck Fallback
+ * 3. Retina High-DPI Page-1 PDF Rendering Sandbox (PDF.js)
+ * 4. Reactive Search & Category Chip Filter
+ * 5. ToyyibPay Secure API Payment Bridge Hook
+ * 6. Netlify Watermark DOM Killer
  * =======================================================================
  */
 
@@ -54,14 +58,11 @@ function getAudioContext() {
     return audioCtx;
 }
 
-/**
- * Resolves verified authentic instrument wave table
- */
 function getInstrumentPreset(type) {
     if (type === 'piano') {
         return window._tone_0000_JCLive_sf2_file || null;
     }
-    // For Guitar: Steel-string acoustic first (ori guitar sound), with Nylon as fallback
+    // Real Steel-string acoustic first, with Nylon as secondary backup
     return window._tone_0250_JCLive_sf2_file || window._tone_0240_JCLive_sf2_file || null;
 }
 
@@ -73,9 +74,6 @@ function primeInstrument(type) {
     }
 }
 
-/**
- * Converts Note Name (e.g. "C4") to MIDI Pitch Number (e.g. 60)
- */
 function noteNameToMidi(noteName) {
     const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
     const regex = /^([A-G][#b]?)(-?\d+)$/;
@@ -92,16 +90,11 @@ function noteNameToMidi(noteName) {
     return noteIndex + (octave + 1) * 12;
 }
 
-/**
- * Instant Plucked Acoustic Guitar String Fallback Engine
- * Used if the soundbank is still buffering so the user NEVER waits
- */
 function playFallbackGuitarString(ctx, midiNote, when, duration, velocity = 0.8) {
     const freq = 440 * Math.pow(2, (midiNote - 69) / 12);
     const outGain = ctx.createGain();
     const filter = ctx.createBiquadFilter();
 
-    // Soundhole Resonance Filter
     filter.type = 'lowpass';
     filter.Q.setValueAtTime(2.2, when);
     filter.frequency.setValueAtTime(4500, when);
@@ -180,7 +173,7 @@ function initHeaderCarousel() {
 }
 
 /* =======================================================================
- * 3. DYNAMIC INVENTORY FETCHING & NORMALIZATION
+ * 3. DYNAMIC INVENTORY FETCHING & GROUPING
  * ======================================================================= */
 
 function generateSlug(filename) {
@@ -349,7 +342,7 @@ document.getElementById('resetFilterBtn').addEventListener('click', () => {
 });
 
 /* =======================================================================
- * 5. CATALOG GRID RENDERER
+ * 5. CATALOG GRID RENDERER (HANDLES CASES A, B, and C)
  * ======================================================================= */
 
 function renderCatalog(items) {
@@ -370,7 +363,38 @@ function renderCatalog(items) {
     items.forEach(song => {
         const hasPiano = !!song.instruments.piano.pdf;
         const hasGuitar = !!song.instruments.guitar.pdf;
-        const isBundle = hasPiano && hasGuitar;
+        const hasBoth = hasPiano && hasGuitar;
+
+        // Build Availability Badges
+        let badgeHTML = '';
+        let subtextHTML = '';
+        let priceTagHTML = '';
+
+        if (hasBoth) {
+            // Case A: Both Piano and Guitar Available
+            badgeHTML = `
+                <span class="badge-piano">Piano Score</span>
+                <span class="badge-guitar">Guitar Tabs</span>
+            `;
+            subtextHTML = 'Complete Score Bundle Available (Piano + Guitar Tabs)';
+            priceTagHTML = 'RM 10.00 Bundle';
+        } else if (hasGuitar && !hasPiano) {
+            // Case B: Only Guitar Available
+            badgeHTML = `
+                <span class="badge-guitar">Guitar Exclusive</span>
+                <span class="badge-unavailable">Piano Score N/A</span>
+            `;
+            subtextHTML = 'Guitar Score & Tablature Edition (No Piano Transcription)';
+            priceTagHTML = 'RM 5.00 Solo Edition';
+        } else if (hasPiano && !hasGuitar) {
+            // Case C: Only Piano Available
+            badgeHTML = `
+                <span class="badge-piano">Piano Exclusive</span>
+                <span class="badge-unavailable">Guitar Score N/A</span>
+            `;
+            subtextHTML = 'Concert Grand Piano Edition (No Guitar Transcription)';
+            priceTagHTML = 'RM 5.00 Solo Edition';
+        }
 
         const card = document.createElement('div');
         card.className = 'song-card';
@@ -381,16 +405,15 @@ function renderCatalog(items) {
             </div>
 
             <div class="card-badges">
-                ${hasPiano ? '<span class="badge-piano">Piano</span>' : ''}
-                ${hasGuitar ? '<span class="badge-guitar">Guitar Tabs</span>' : ''}
+                ${badgeHTML}
             </div>
 
             <h3>${song.title}</h3>
-            <p class="card-subtext">Concert Transcription with Authentic Instrument Playback</p>
+            <p class="card-subtext">${subtextHTML}</p>
 
             <div class="card-footer">
-                <span class="price-pill">${isBundle ? 'RM 10.00 Bundle' : 'RM 5.00 Solo'}</span>
-                <span class="action-link">Preview & Play →</span>
+                <span class="price-pill">${priceTagHTML}</span>
+                <span class="action-link">Preview Score →</span>
             </div>
         `;
 
@@ -406,6 +429,7 @@ function renderCatalog(items) {
 async function renderSecureFirstPage(pdfUrl) {
     const canvas = document.getElementById('sheetCanvas');
     const ctx = canvas.getContext('2d');
+    const watermarkSubtitle = document.getElementById('watermarkSubtitle');
 
     if (!pdfUrl) {
         canvas.width = 340;
@@ -415,9 +439,15 @@ async function renderSecureFirstPage(pdfUrl) {
         ctx.fillStyle = "#94A3B8";
         ctx.font = "14px 'Plus Jakarta Sans', sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText("Score unavailable for this instrument.", canvas.width / 2, canvas.height / 2);
+        ctx.fillText("No score transcribed for this instrument.", canvas.width / 2, canvas.height / 2 - 10);
+        ctx.font = "12px 'Plus Jakarta Sans', sans-serif";
+        ctx.fillStyle = "#64748B";
+        ctx.fillText("Check the alternate instrument tab above.", canvas.width / 2, canvas.height / 2 + 15);
+        if (watermarkSubtitle) watermarkSubtitle.textContent = "Edition Not Available";
         return;
     }
+
+    if (watermarkSubtitle) watermarkSubtitle.textContent = "Page 1 of Complete Score";
 
     try {
         const loadingTask = pdfjsLib.getDocument(pdfUrl);
@@ -465,6 +495,19 @@ const audioStatus = document.getElementById('audioStatus');
 const audioProgress = document.getElementById('audioProgress');
 
 function updateAudioStatusLabel() {
+    const hasCurrentInstrument = !!currentSong?.instruments?.[activeInstrument]?.pdf;
+
+    if (!hasCurrentInstrument) {
+        audioStatus.textContent = `No ${activeInstrument.toUpperCase()} Audio for this track`;
+        playIcon.textContent = '✕';
+        playBtn.style.opacity = '0.4';
+        playBtn.style.pointerEvents = 'none';
+        return;
+    }
+
+    playBtn.style.opacity = '1';
+    playBtn.style.pointerEvents = 'auto';
+
     if (isPlaying) {
         audioStatus.textContent = `Playing ${activeInstrument === 'piano' ? 'Concert Grand Piano HD' : 'Steel Acoustic Guitar (Ori)'}...`;
         playIcon.textContent = '⏸';
@@ -475,7 +518,6 @@ function updateAudioStatusLabel() {
 }
 
 async function toggleAudioPlayback() {
-    // 1. Synchronously unlock Web Audio on immediate click
     const ctx = getAudioContext();
     primeInstrument(activeInstrument);
 
@@ -483,6 +525,9 @@ async function toggleAudioPlayback() {
         stopAudioPlayback();
         return;
     }
+
+    const hasCurrentInstrument = !!currentSong?.instruments?.[activeInstrument]?.pdf;
+    if (!hasCurrentInstrument) return;
 
     const preset = getInstrumentPreset(activeInstrument);
     const currentMidiFile = currentSong?.instruments?.[activeInstrument]?.mid;
@@ -501,7 +546,7 @@ async function toggleAudioPlayback() {
 
                 const now = ctx.currentTime + 0.08;
                 playbackStartTime = now;
-                currentTrackDuration = Math.min(midi.duration || 30, 45); // 45s preview slice
+                currentTrackDuration = Math.min(midi.duration || 30, 45);
 
                 midi.tracks.forEach(track => {
                     track.notes.forEach(note => {
@@ -521,7 +566,6 @@ async function toggleAudioPlayback() {
                                     volume
                                 );
                             } else {
-                                // Instant zero-latency fallback if preset is still caching
                                 const delayMs = note.time * 1000;
                                 const timer = setTimeout(() => {
                                     if (isPlaying) {
@@ -542,7 +586,7 @@ async function toggleAudioPlayback() {
         }
     }
 
-    // High-Fidelity Verified Sample Progression Demo (Instant Sound Guarantee)
+    // Demo Progression Fallback
     stopAudioPlayback(false);
     isPlaying = true;
     updateAudioStatusLabel();
@@ -552,32 +596,31 @@ async function toggleAudioPlayback() {
     currentTrackDuration = 8.0;
 
     const demoNotes = activeInstrument === 'piano' ? [
-        { time: 0.0, midi: 60, dur: 1.5, vel: 0.85 }, // C4
-        { time: 0.0, midi: 64, dur: 1.5, vel: 0.8 },  // E4
-        { time: 0.0, midi: 67, dur: 1.5, vel: 0.85 }, // G4
-        { time: 1.5, midi: 55, dur: 1.5, vel: 0.8 },  // G3
-        { time: 1.5, midi: 59, dur: 1.5, vel: 0.8 },  // B3
-        { time: 1.5, midi: 62, dur: 1.5, vel: 0.85 }, // D4
-        { time: 3.0, midi: 57, dur: 1.5, vel: 0.8 },  // A3
-        { time: 3.0, midi: 60, dur: 1.5, vel: 0.8 },  // C4
-        { time: 3.0, midi: 64, dur: 1.5, vel: 0.85 }, // E4
-        { time: 4.5, midi: 53, dur: 2.8, vel: 0.9 },  // F3
-        { time: 4.5, midi: 60, dur: 2.8, vel: 0.85 }, // C4
-        { time: 4.5, midi: 65, dur: 2.8, vel: 0.9 }   // F4
+        { time: 0.0, midi: 60, dur: 1.5, vel: 0.85 },
+        { time: 0.0, midi: 64, dur: 1.5, vel: 0.8 },
+        { time: 0.0, midi: 67, dur: 1.5, vel: 0.85 },
+        { time: 1.5, midi: 55, dur: 1.5, vel: 0.8 },
+        { time: 1.5, midi: 59, dur: 1.5, vel: 0.8 },
+        { time: 1.5, midi: 62, dur: 1.5, vel: 0.85 },
+        { time: 3.0, midi: 57, dur: 1.5, vel: 0.8 },
+        { time: 3.0, midi: 60, dur: 1.5, vel: 0.8 },
+        { time: 3.0, midi: 64, dur: 1.5, vel: 0.85 },
+        { time: 4.5, midi: 53, dur: 2.8, vel: 0.9 },
+        { time: 4.5, midi: 60, dur: 2.8, vel: 0.85 },
+        { time: 4.5, midi: 65, dur: 2.8, vel: 0.9 }
     ] : [
-        // Authentic Steel-String Acoustic Guitar Chime & Pluck (Ori Sound)
-        { time: 0.0, midi: 52, dur: 1.2, vel: 0.9 },  // E3
-        { time: 0.25, midi: 59, dur: 1.2, vel: 0.85 }, // B3
-        { time: 0.5, midi: 64, dur: 1.2, vel: 0.9 },  // E4
-        { time: 0.75, midi: 67, dur: 1.2, vel: 0.85 }, // G4
-        { time: 1.5, midi: 50, dur: 1.2, vel: 0.9 },  // D3
-        { time: 1.75, midi: 57, dur: 1.2, vel: 0.85 }, // A3
-        { time: 2.0, midi: 62, dur: 1.2, vel: 0.9 },  // D4
-        { time: 2.25, midi: 66, dur: 1.2, vel: 0.85 }, // F#4
-        { time: 3.0, midi: 48, dur: 1.2, vel: 0.9 },  // C3
-        { time: 3.25, midi: 55, dur: 1.2, vel: 0.85 }, // G3
-        { time: 3.5, midi: 60, dur: 1.2, vel: 0.9 },  // C4
-        { time: 3.75, midi: 64, dur: 2.5, vel: 0.95 }  // E4
+        { time: 0.0, midi: 52, dur: 1.2, vel: 0.9 },
+        { time: 0.25, midi: 59, dur: 1.2, vel: 0.85 },
+        { time: 0.5, midi: 64, dur: 1.2, vel: 0.9 },
+        { time: 0.75, midi: 67, dur: 1.2, vel: 0.85 },
+        { time: 1.5, midi: 50, dur: 1.2, vel: 0.9 },
+        { time: 1.75, midi: 57, dur: 1.2, vel: 0.85 },
+        { time: 2.0, midi: 62, dur: 1.2, vel: 0.9 },
+        { time: 2.25, midi: 66, dur: 1.2, vel: 0.85 },
+        { time: 3.0, midi: 48, dur: 1.2, vel: 0.9 },
+        { time: 3.25, midi: 55, dur: 1.2, vel: 0.85 },
+        { time: 3.5, midi: 60, dur: 1.2, vel: 0.9 },
+        { time: 3.75, midi: 64, dur: 2.5, vel: 0.95 }
     ];
 
     demoNotes.forEach(n => {
@@ -608,17 +651,14 @@ async function toggleAudioPlayback() {
 function stopAudioPlayback(resetUI = true) {
     isPlaying = false;
 
-    // Clear all pending timers
     scheduledNoteTimers.forEach(id => clearTimeout(id));
     scheduledNoteTimers = [];
 
-    // Stop and disconnect fallback nodes
     activeFallbackNodes.forEach(node => {
         try { node.stop(); } catch (e) {}
     });
     activeFallbackNodes = [];
 
-    // Stop all queued soundfont wave notes
     if (soundFontPlayer && audioCtx) {
         soundFontPlayer.cancelQueue(audioCtx);
     }
@@ -657,7 +697,7 @@ function startProgressTracker() {
 playBtn.addEventListener('click', toggleAudioPlayback);
 
 /* =======================================================================
- * 8. MODAL MANAGEMENT & INSTRUMENT PREVIEWS
+ * 8. MODAL MANAGEMENT & ASYMMETRIC UI HANDLER
  * ======================================================================= */
 
 const modal = document.getElementById('previewModal');
@@ -669,15 +709,36 @@ function openPreviewModal(song) {
     currentSong = song;
     document.getElementById('previewTitle').innerText = song.title;
 
-    if (song.instruments.piano.pdf) {
-        activeInstrument = 'piano';
+    const hasPiano = !!song.instruments.piano.pdf;
+    const hasGuitar = !!song.instruments.guitar.pdf;
+
+    // Determine initial active instrument strictly based on what is available
+    if (hasPiano && hasGuitar) {
+        activeInstrument = 'piano'; // default to piano if both exist
+    } else if (hasGuitar) {
+        activeInstrument = 'guitar'; // boot straight into guitar if piano missing
     } else {
-        activeInstrument = 'guitar';
+        activeInstrument = 'piano'; // boot into piano if guitar missing
     }
 
-    tabPiano.style.display = song.instruments.piano.pdf ? 'block' : 'none';
-    tabGuitar.style.display = song.instruments.guitar.pdf ? 'block' : 'none';
+    // Update Tab Labels and Disabled states
+    if (hasPiano) {
+        tabPiano.classList.remove('disabled');
+        tabPiano.textContent = "Piano Score";
+    } else {
+        tabPiano.classList.add('disabled');
+        tabPiano.textContent = "Piano Score (N/A)";
+    }
 
+    if (hasGuitar) {
+        tabGuitar.classList.remove('disabled');
+        tabGuitar.textContent = "Guitar Score";
+    } else {
+        tabGuitar.classList.add('disabled');
+        tabGuitar.textContent = "Guitar Score (N/A)";
+    }
+
+    // Configure Pricing Selectors Dynamically
     configurePricingOptions(song);
     updateModalView();
     modal.classList.add('active');
@@ -686,24 +747,41 @@ function openPreviewModal(song) {
     primeInstrument(activeInstrument);
 }
 
+/**
+ * Dynamically hides/shows checkout options based on available files:
+ * - Case A (Both): Shows RM10 bundle (selected), RM5 piano, RM5 guitar.
+ * - Case B (Guitar only): Hides RM10 bundle & RM5 piano. Auto-selects RM5 Guitar.
+ * - Case C (Piano only): Hides RM10 bundle & RM5 guitar. Auto-selects RM5 Piano.
+ */
 function configurePricingOptions(song) {
     const hasPiano = !!song.instruments.piano.pdf;
     const hasGuitar = !!song.instruments.guitar.pdf;
 
-    const bothOpt = document.querySelector('.price-option[data-bundle="both"]');
-    const pianoOpt = document.querySelector('.price-option[data-bundle="piano"]');
-    const guitarOpt = document.querySelector('.price-option[data-bundle="guitar"]');
-
-    bothOpt.style.display = (hasPiano && hasGuitar) ? 'flex' : 'none';
-    pianoOpt.style.display = hasPiano ? 'flex' : 'none';
-    guitarOpt.style.display = hasGuitar ? 'flex' : 'none';
+    const optBundle = document.getElementById('optBundle');
+    const optPiano = document.getElementById('optPiano');
+    const optGuitar = document.getElementById('optGuitar');
+    const dynamicPriceLabel = document.getElementById('dynamicPriceLabel');
 
     if (hasPiano && hasGuitar) {
-        bothOpt.click();
-    } else if (hasPiano) {
-        pianoOpt.click();
-    } else if (hasGuitar) {
-        guitarOpt.click();
+        // Case A: Both Available
+        optBundle.style.display = 'flex';
+        optPiano.style.display = 'flex';
+        optGuitar.style.display = 'flex';
+        optBundle.click(); // Selects RM 10 Bundle by default
+    } else if (hasGuitar && !hasPiano) {
+        // Case B: Only Guitar Available
+        optBundle.style.display = 'none';
+        optPiano.style.display = 'none';
+        optGuitar.style.display = 'flex';
+        optGuitar.click(); // Selects RM 5 Guitar Solo
+        dynamicPriceLabel.textContent = "RM 5.00";
+    } else if (hasPiano && !hasGuitar) {
+        // Case C: Only Piano Available
+        optBundle.style.display = 'none';
+        optPiano.style.display = 'flex';
+        optGuitar.style.display = 'none';
+        optPiano.click(); // Selects RM 5 Piano Solo
+        dynamicPriceLabel.textContent = "RM 5.00";
     }
 }
 
@@ -719,6 +797,7 @@ function updateModalView() {
 }
 
 tabPiano.addEventListener('click', () => { 
+    if (!currentSong?.instruments?.piano?.pdf) return; // Ignore if missing
     if (activeInstrument !== 'piano') { 
         activeInstrument = 'piano'; 
         updateModalView(); 
@@ -727,6 +806,7 @@ tabPiano.addEventListener('click', () => {
 });
 
 tabGuitar.addEventListener('click', () => { 
+    if (!currentSong?.instruments?.guitar?.pdf) return; // Ignore if missing
     if (activeInstrument !== 'guitar') { 
         activeInstrument = 'guitar'; 
         updateModalView(); 
@@ -787,7 +867,7 @@ function initiateToyyibpayCheckout({ songSlug, title, bundleType, amountRM }) {
         userSecretKey: "YOUR_TOYYIBPAY_USER_SECRET_KEY",
         categoryCode: "YOUR_TOYYIBPAY_CATEGORY_CODE",
         billName: `Tazaro: ${title.substring(0, 30)}`,
-        billDescription: `Score Bundle: ${bundleType.toUpperCase()} (PDF, MusicXML, MIDI)`,
+        billDescription: `Score Edition: ${bundleType.toUpperCase()} (PDF, MusicXML, MIDI)`,
         billPriceSetting: 1,
         billPayorInfo: 1,
         billAmount: amountInCents,
