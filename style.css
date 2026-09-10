@@ -644,7 +644,7 @@ body {
 }
 
 /* ==========================================================
-   AUDIO PLAYER UI & SPINNER ANIMATIONS
+   AUDIO PLAYER UI
    ========================================================== */
 .audio-player-box {
     background: var(--bg-surface-elevated);
@@ -670,47 +670,23 @@ body {
     justify-content: center;
     cursor: pointer;
     color: #000;
-    font-size: 1.05rem;
-    transition: transform 0.2s ease, background-color 0.2s ease, opacity 0.2s ease;
-    position: relative;
+    font-size: 1.1rem;
+    transition: transform 0.2s ease, background-color 0.2s ease;
 }
-.play-btn:hover:not(:disabled) {
+.play-btn:hover {
     transform: scale(1.06);
     background: var(--accent-gold-light);
 }
-.play-btn:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-    pointer-events: none;
-    transform: none;
-    background: rgba(255, 255, 255, 0.15);
-}
-
-/* Audio Spinner for Loading State */
-.audio-spinner {
-    width: 20px;
-    height: 20px;
-    border: 2.5px solid rgba(255, 255, 255, 0.25);
-    border-top-color: var(--accent-gold);
-    border-radius: 50%;
-    display: inline-block;
-    animation: audioSpin 0.75s linear infinite;
-}
-@keyframes audioSpin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+.play-btn:active {
+    transform: scale(0.96);
 }
 
 .audio-track-info { flex: 1; }
 .audio-status { 
-    font-size: 0.8rem; 
-    color: var(--text-muted); 
+    font-size: 0.82rem; 
+    color: var(--accent-gold-light); 
     display: block; 
     margin-bottom: 5px; 
-    transition: color 0.2s ease;
-}
-.audio-status.ready {
-    color: var(--accent-gold-light);
     font-weight: 600;
 }
 .audio-progress-bar {
