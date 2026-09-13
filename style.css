@@ -660,6 +660,187 @@ body {
 }
 
 /* ==========================================================
+   PIANO SCORE SPECIFICATION & RESELLER LICENSE CARD
+   ========================================================== */
+.piano-spec-card {
+    background: linear-gradient(180deg, rgba(22, 27, 34, 0.95) 0%, rgba(14, 18, 23, 0.95) 100%);
+    border: 1px solid rgba(212, 175, 55, 0.22);
+    border-radius: var(--radius-md);
+    padding: 1.15rem;
+    margin: 1rem 0 0.85rem;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.45);
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    animation: fadeInSpec 0.25s ease-out;
+}
+
+@keyframes fadeInSpec {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.spec-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border-hairline);
+    padding-bottom: 0.6rem;
+}
+
+.spec-badge {
+    font-family: var(--font-heading);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--accent-gold);
+    font-weight: 700;
+}
+
+.spec-level-tag {
+    background: rgba(56, 189, 248, 0.12);
+    color: var(--piano-cyan);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 50px;
+    letter-spacing: 0.04em;
+}
+
+.spec-scoring-desc {
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: #CBD5E1;
+}
+
+.spec-scoring-desc strong {
+    color: #F8FAFC;
+}
+
+.spec-scoring-desc em {
+    color: var(--accent-gold-light);
+    font-style: normal;
+    font-weight: 600;
+}
+
+/* Checklist Grid */
+.spec-deliverables {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 0.85rem;
+}
+
+.deliverables-title {
+    display: block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    font-weight: 700;
+    margin-bottom: 0.45rem;
+}
+
+.spec-checklist {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.spec-checklist li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.78rem;
+    color: #E2E8F0;
+}
+
+.check-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 17px;
+    height: 17px;
+    min-width: 17px;
+    background: rgba(16, 185, 129, 0.2);
+    color: var(--accent-emerald);
+    border: 1px solid rgba(16, 185, 129, 0.45);
+    border-radius: 50%;
+    font-size: 0.65rem;
+    font-weight: 800;
+}
+
+/* MuseStudio Pro Tip */
+.spec-pro-tip {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+    background: rgba(255, 255, 255, 0.02);
+    border-left: 2px solid var(--accent-gold);
+    padding: 0.5rem 0.7rem;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.spec-pro-tip .tip-icon {
+    font-size: 1.05rem;
+    color: var(--accent-gold);
+    line-height: 1;
+}
+
+.spec-pro-tip strong {
+    color: var(--accent-gold-light);
+}
+
+/* Highlight Box: Reseller & Auto-Arrangement */
+.spec-highlight-box {
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.08) 0%, rgba(229, 142, 88, 0.08) 100%);
+    border: 1px solid rgba(212, 175, 55, 0.4);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 0.85rem;
+    position: relative;
+}
+
+.highlight-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 0.35rem;
+    flex-wrap: wrap;
+    font-size: 0.78rem;
+    color: var(--accent-gold-light);
+}
+
+.highlight-badge {
+    background: var(--accent-gold);
+    color: #07090B;
+    font-size: 0.62rem;
+    font-weight: 800;
+    padding: 1px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.spec-highlight-box p {
+    font-size: 0.74rem;
+    color: #CBD5E1;
+    line-height: 1.4;
+    margin: 0;
+}
+
+.spec-highlight-box strong {
+    color: #FFFFFF;
+    text-decoration: underline dotted var(--accent-gold);
+}
+
+/* ==========================================================
    AUDIO PLAYER UI
    ========================================================== */
 .audio-player-box {
