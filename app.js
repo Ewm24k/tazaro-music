@@ -18,7 +18,8 @@
  * 4. Retina High-DPI Page-1 PDF Rendering Sandbox (PDF.js)
  * 5. Reactive Search & Category Chip Filter
  * 6. ToyyibPay Secure API Payment Bridge Hook
- * 7. Netlify Watermark DOM Killer
+ * 7. Dynamic Piano Specification & MuseStudio Reseller License Panel
+ * 8. Netlify Watermark DOM Killer
  * =======================================================================
  */
 
@@ -153,9 +154,9 @@ function playFallbackGuitarString(ctx, midiNote, when, duration, velocity = 0.8)
     });
 }
 
-/* =======================================================================
+/* ==========================================================
  * 2. NATIVE MUSICXML SCORE PARSER
- * ======================================================================= */
+ * ========================================================== */
 
 /**
  * Extracts raw XML text whether it is plain text XML or a compressed ZIP (.mxl)
@@ -329,9 +330,9 @@ function parseMusicXMLToNotes(rawXmlString) {
     };
 }
 
-/* =======================================================================
+/* ==========================================================
  * 3. ANIMATED HERO KEYWORD CAROUSEL
- * ======================================================================= */
+ * ========================================================== */
 
 const audienceKeywords = [
     "Virtuoso Pianists",
@@ -359,9 +360,9 @@ function initHeaderCarousel() {
     }, 3200);
 }
 
-/* =======================================================================
+/* ==========================================================
  * 4. DYNAMIC INVENTORY FETCHING & GROUPING
- * ======================================================================= */
+ * ========================================================== */
 
 function generateSlug(filename) {
     const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.'));
@@ -456,9 +457,9 @@ function processDiscoveredFiles(filePaths) {
     return Object.values(registry);
 }
 
-/* =======================================================================
+/* ==========================================================
  * 5. SEARCH & GALLERY FILTER ENGINE
- * ======================================================================= */
+ * ========================================================== */
 
 function updateFilterCounts(items) {
     const total = items.length;
@@ -528,9 +529,9 @@ document.getElementById('resetFilterBtn').addEventListener('click', () => {
     applyFiltersAndSearch();
 });
 
-/* =======================================================================
+/* ==========================================================
  * 6. CATALOG GRID RENDERER
- * ======================================================================= */
+ * ========================================================== */
 
 function renderCatalog(items) {
     const songGrid = document.getElementById('songGrid');
@@ -605,9 +606,9 @@ function renderCatalog(items) {
     });
 }
 
-/* =======================================================================
+/* ==========================================================
  * 7. RETINA HIGH-DPI PAGE-1 PDF PREVIEW ENGINE
- * ======================================================================= */
+ * ========================================================== */
 
 async function renderSecureFirstPage(pdfUrl) {
     const canvas = document.getElementById('sheetCanvas');
@@ -668,9 +669,9 @@ async function renderSecureFirstPage(pdfUrl) {
     }
 }
 
-/* =======================================================================
+/* ==========================================================
  * 8. AUTHENTIC AUDIO CONTROLLER (PURGED OF ALL "MIDI" LABELS)
- * ======================================================================= */
+ * ========================================================== */
 
 const playBtn = document.getElementById('playAudioBtn');
 const playIcon = document.getElementById('playIcon');
@@ -716,9 +717,7 @@ async function toggleAudioPlayback() {
     const currentXmlFile = currentSong?.instruments?.[activeInstrument]?.musicxml;
     const currentMidiFile = currentSong?.instruments?.[activeInstrument]?.mid;
 
-    // ==============================================================
     // 1. STRICTLY FORCE MUSICXML PLAYBACK (PRIMARY ENGINE)
-    // ==============================================================
     if (currentXmlFile) {
         try {
             audioStatus.textContent = "Preparing Score Arrangement...";
@@ -774,9 +773,7 @@ async function toggleAudioPlayback() {
         }
     }
 
-    // ==============================================================
     // 2. BACKGROUND COMPANION PLAYBACK (SILENT TECHNICAL FALLBACK)
-    // ==============================================================
     if (currentMidiFile && window.Midi) {
         try {
             audioStatus.textContent = "Preparing Score Audio...";
@@ -831,9 +828,7 @@ async function toggleAudioPlayback() {
         }
     }
 
-    // ==============================================================
     // 3. SOUND PROGRESSION DEMO (IF FILES ARE MISSING)
-    // ==============================================================
     stopAudioPlayback(false);
     isPlaying = true;
     updateAudioStatusLabel();
@@ -939,9 +934,9 @@ function startProgressTracker() {
 
 playBtn.addEventListener('click', toggleAudioPlayback);
 
-/* =======================================================================
+/* ==========================================================
  * 9. MODAL MANAGEMENT & ASYMMETRIC UI HANDLER
- * ======================================================================= */
+ * ========================================================== */
 
 const modal = document.getElementById('previewModal');
 const modalCloseBtn = document.getElementById('modalCloseBtn');
@@ -1019,6 +1014,12 @@ function updateModalView() {
     tabPiano.classList.toggle('active', activeInstrument === 'piano');
     tabGuitar.classList.toggle('active', activeInstrument === 'guitar');
 
+    // Dynamic visibility: Display piano information specifically under the Piano tab
+    const pianoSpecCard = document.getElementById('pianoSpecCard');
+    if (pianoSpecCard) {
+        pianoSpecCard.style.display = (activeInstrument === 'piano') ? 'flex' : 'none';
+    }
+
     if (isPlaying) stopAudioPlayback(true);
     updateAudioStatusLabel();
 
@@ -1056,9 +1057,9 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-/* =======================================================================
+/* ==========================================================
  * 10. COMMERCE & TOYYIBPAY INTEGRATION
- * ======================================================================= */
+ * ========================================================== */
 
 const priceOptions = document.querySelectorAll('.price-option');
 const dynamicPriceLabel = document.getElementById('dynamicPriceLabel');
@@ -1119,9 +1120,9 @@ function initiateToyyibpayCheckout({ songSlug, title, bundleType, amountRM }) {
     );
 }
 
-/* =======================================================================
+/* ==========================================================
  * 11. NETLIFY WATERMARK DOM REMOVER
- * ======================================================================= */
+ * ========================================================== */
 
 const purgeNetlifyBadges = () => {
     document.querySelectorAll('a[href*="netlify.com"], [class*="netlify"], [id*="netlify"]').forEach(el => {
@@ -1135,9 +1136,9 @@ purgeNetlifyBadges();
 const badgeObserver = new MutationObserver(purgeNetlifyBadges);
 badgeObserver.observe(document.body, { childList: true, subtree: true });
 
-/* =======================================================================
+/* ==========================================================
  * 12. BOOT INITIALIZATION
- * ======================================================================= */
+ * ========================================================== */
 
 document.addEventListener('DOMContentLoaded', () => {
     initHeaderCarousel();
