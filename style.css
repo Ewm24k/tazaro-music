@@ -191,6 +191,82 @@ body {
 }
 
 /* ==========================================================
+   HERO INSTANT CREATOR SPOTLIGHT CARD
+   ========================================================== */
+.hero-creator-card {
+    margin-top: 1.5rem;
+    max-width: 680px;
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.08) 0%, rgba(18, 23, 34, 0.7) 100%);
+    border: 1px solid rgba(212, 175, 55, 0.28);
+    border-radius: var(--radius-md);
+    padding: 1.25rem 1.4rem;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.25s ease, transform 0.25s ease;
+}
+
+.hero-creator-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 100%;
+    background: linear-gradient(180deg, var(--accent-gold), var(--accent-copper));
+}
+
+.hero-creator-card:hover {
+    border-color: rgba(212, 175, 55, 0.5);
+    transform: translateY(-2px);
+}
+
+.creator-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--accent-gold-light);
+    background: rgba(212, 175, 55, 0.12);
+    border: 1px solid rgba(212, 175, 55, 0.25);
+    padding: 3px 9px;
+    border-radius: 50px;
+    margin-bottom: 0.65rem;
+}
+
+.creator-badge-sparkle {
+    color: var(--accent-gold);
+    font-size: 0.85rem;
+    line-height: 1;
+}
+
+.creator-heading {
+    font-family: var(--font-heading);
+    font-size: clamp(1.05rem, 2.8vw, 1.25rem);
+    color: var(--text-pure);
+    letter-spacing: 0.02em;
+    margin-bottom: 0.4rem;
+    font-weight: 600;
+}
+
+.creator-text {
+    font-size: clamp(0.82rem, 2vw, 0.9rem);
+    color: #CBD5E1;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.creator-text strong {
+    color: var(--accent-gold-light);
+    font-weight: 700;
+}
+
+/* ==========================================================
    GALLERY TOOLBAR (DESKTOP DEFAULT)
    ========================================================== */
 .catalog-wrapper {
@@ -1169,6 +1245,10 @@ body {
     
     .hero {
         padding: 2.2rem 1rem 1.25rem;
+    }
+    .hero-creator-card {
+        margin-top: 1.2rem;
+        padding: 1.05rem 1.15rem;
     }
     .catalog-wrapper {
         padding: 0.5rem 1rem 6rem;
