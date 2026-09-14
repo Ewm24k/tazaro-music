@@ -19,7 +19,8 @@
  * 5. Reactive Search & Category Chip Filter
  * 6. ToyyibPay Secure API Payment Bridge Hook
  * 7. Dynamic Piano Specification & MuseStudio Reseller License Panel
- * 8. Netlify Watermark DOM Killer
+ * 8. First-Load / Page Refresh Catalog Roadmap Announcement Modal
+ * 9. Netlify Watermark DOM Killer
  * =======================================================================
  */
 
@@ -47,9 +48,9 @@ let currentTrackDuration = 0;
 // Maximum simultaneous notes per chord window
 const MAX_CONCURRENT_NOTES_PER_CHORD = 16;
 
-/* =======================================================================
+/* ==========================================================
  * 1. REAL INSTRUMENT SOUND ENGINE RESOLVER
- * ======================================================================= */
+ * ========================================================== */
 
 function getAudioContext() {
     if (!audioCtx) {
@@ -180,7 +181,7 @@ async function extractMusicXMLText(arrayBuffer) {
  * Parses MusicXML data with sanitized DTD handling and parallel part synchronization
  */
 function parseMusicXMLToNotes(rawXmlString) {
-    // 1. Remove DTD and external entities that cause DOMParser XML entity errors
+    // Remove DTD and external entities that cause DOMParser XML entity errors
     const cleanXml = rawXmlString.replace(/<!DOCTYPE[\s\S]*?>/gi, '');
 
     const parser = new DOMParser();
@@ -214,7 +215,7 @@ function parseMusicXMLToNotes(rawXmlString) {
         parts = [xmlDoc];
     }
 
-    // Parse every <part> (e.g. Treble and Bass or Staves) starting strictly from t = 0s
+    // Parse every <part> starting strictly from t = 0s
     Array.from(parts).forEach(part => {
         let currentBpm = globalInitialBpm;
         let divisions = 1;
@@ -223,7 +224,6 @@ function parseMusicXMLToNotes(rawXmlString) {
         const measures = part.getElementsByTagName('measure');
 
         Array.from(measures).forEach(measure => {
-            // Tempo changes within measure
             const soundTags = measure.getElementsByTagName('sound');
             for (let s of soundTags) {
                 const t = parseFloat(s.getAttribute('tempo'));
@@ -239,7 +239,6 @@ function parseMusicXMLToNotes(rawXmlString) {
                 if (!isNaN(t) && t > 30) currentBpm = t;
             }
 
-            // Divisions definition (<divisions>N</divisions>)
             const divTags = measure.getElementsByTagName('divisions');
             if (divTags.length > 0) {
                 const newDiv = parseInt(divTags[0].textContent, 10);
@@ -1050,13 +1049,6 @@ modalCloseBtn.addEventListener('click', () => {
     if (isPlaying) stopAudioPlayback(true);
 });
 
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modal.classList.contains('active')) {
-        modal.classList.remove('active');
-        if (isPlaying) stopAudioPlayback(true);
-    }
-});
-
 /* ==========================================================
  * 10. COMMERCE & TOYYIBPAY INTEGRATION
  * ========================================================== */
@@ -1121,7 +1113,51 @@ function initiateToyyibpayCheckout({ songSlug, title, bundleType, amountRM }) {
 }
 
 /* ==========================================================
- * 11. NETLIFY WATERMARK DOM REMOVER
+ * 11. PAGE-LOAD & REFRESH WELCOME ANNOUNCEMENT POPUP
+ * ========================================================== */
+
+function initWelcomeAnnouncementModal() {
+    const welcomeModal = document.getElementById('welcomeModal');
+    const welcomeCloseBtn = document.getElementById('welcomeCloseBtn');
+    const welcomeAckBtn = document.getElementById('welcomeAckBtn');
+
+    if (!welcomeModal) return;
+
+    // Display notice popup automatically upon every page load / refresh
+    welcomeModal.classList.add('active');
+
+    const closeWelcomeModal = () => {
+        welcomeModal.classList.remove('active');
+    };
+
+    if (welcomeCloseBtn) {
+        welcomeCloseBtn.addEventListener('click', closeWelcomeModal);
+    }
+
+    if (welcomeAckBtn) {
+        welcomeAckBtn.addEventListener('click', closeWelcomeModal);
+    }
+
+    welcomeModal.addEventListener('click', (e) => {
+        if (e.target === welcomeModal) {
+            closeWelcomeModal();
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (welcomeModal.classList.contains('active')) {
+                closeWelcomeModal();
+            } else if (modal.classList.contains('active')) {
+                modal.classList.remove('active');
+                if (isPlaying) stopAudioPlayback(true);
+            }
+        }
+    });
+}
+
+/* ==========================================================
+ * 12. NETLIFY WATERMARK DOM REMOVER
  * ========================================================== */
 
 const purgeNetlifyBadges = () => {
@@ -1137,10 +1173,11 @@ const badgeObserver = new MutationObserver(purgeNetlifyBadges);
 badgeObserver.observe(document.body, { childList: true, subtree: true });
 
 /* ==========================================================
- * 12. BOOT INITIALIZATION
+ * 13. BOOT INITIALIZATION
  * ========================================================== */
 
 document.addEventListener('DOMContentLoaded', () => {
     initHeaderCarousel();
+    initWelcomeAnnouncementModal();
     fetchDynamicInventory();
 });
