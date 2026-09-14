@@ -17,9 +17,9 @@
  * 3. Master Limiter/Compressor Bus to prevent speaker clipping on dense chords
  * 4. Retina High-DPI Page-1 PDF Rendering Sandbox (PDF.js)
  * 5. Reactive Search & Category Chip Filter
- * 6. ToyyibPay Secure API Payment Bridge Hook
- * 7. Dynamic Piano Specification & MuseStudio Reseller License Panel
- * 8. First-Load / Page Refresh Catalog Roadmap Announcement Modal
+ * 6. Dynamic Piano Specification & MuseStudio Reseller License Panel
+ * 7. First-Load / Page Refresh Catalog Roadmap Announcement Modal
+ * 8. Automatic Test Checkout File Delivery Engine (Option B: Sequential Download)
  * 9. Netlify Watermark DOM Killer
  * =======================================================================
  */
@@ -181,13 +181,11 @@ async function extractMusicXMLText(arrayBuffer) {
  * Parses MusicXML data with sanitized DTD handling and parallel part synchronization
  */
 function parseMusicXMLToNotes(rawXmlString) {
-    // Remove DTD and external entities that cause DOMParser XML entity errors
     const cleanXml = rawXmlString.replace(/<!DOCTYPE[\s\S]*?>/gi, '');
 
     const parser = new DOMParser();
     let xmlDoc = parser.parseFromString(cleanXml, "text/xml");
 
-    // Fallback to text/html lenient mode if XML parsing encountered syntax warnings
     if (xmlDoc.getElementsByTagName("parsererror").length > 0) {
         xmlDoc = parser.parseFromString(cleanXml, "text/html");
     }
@@ -196,7 +194,6 @@ function parseMusicXMLToNotes(rawXmlString) {
     let parsedNotes = [];
     let longestPartDuration = 0;
 
-    // Detect Global Initial Tempo from document
     let globalInitialBpm = 110;
     const globalSound = xmlDoc.querySelector('sound[tempo]');
     if (globalSound) {
@@ -215,7 +212,6 @@ function parseMusicXMLToNotes(rawXmlString) {
         parts = [xmlDoc];
     }
 
-    // Parse every <part> starting strictly from t = 0s
     Array.from(parts).forEach(part => {
         let currentBpm = globalInitialBpm;
         let divisions = 1;
@@ -1050,7 +1046,7 @@ modalCloseBtn.addEventListener('click', () => {
 });
 
 /* ==========================================================
- * 10. COMMERCE & TOYYIBPAY INTEGRATION
+ * 10. TEST CHECKOUT: AUTOMATIC FILE DELIVERY ENGINE (OPTION B)
  * ========================================================== */
 
 const priceOptions = document.querySelectorAll('.price-option');
@@ -1084,32 +1080,56 @@ document.getElementById('toyyibpaySubmit').addEventListener('click', () => {
 });
 
 function initiateToyyibpayCheckout({ songSlug, title, bundleType, amountRM }) {
-    const amountInCents = Math.round(parseFloat(amountRM) * 100).toString();
+    const filesToDownload = [];
 
-    const toyyibpayPayload = {
-        userSecretKey: "YOUR_TOYYIBPAY_USER_SECRET_KEY",
-        categoryCode: "YOUR_TOYYIBPAY_CATEGORY_CODE",
-        billName: `Tazaro: ${title.substring(0, 30)}`,
-        billDescription: `Score Edition: ${bundleType.toUpperCase()} (PDF, MusicXML)`,
-        billPriceSetting: 1,
-        billPayorInfo: 1,
-        billAmount: amountInCents,
-        billReturnUrl: `${window.location.origin}/success.html`,
-        billCallbackUrl: `${window.location.origin}/.netlify/functions/toyyibpay-callback`,
-        billExternalReferenceNo: `TAZ-${songSlug}-${bundleType}-${Date.now()}`
-    };
+    // 1. Gather Piano files if selected
+    if (bundleType === 'piano' || bundleType === 'both') {
+        const piano = currentSong.instruments.piano;
+        if (piano.pdf) filesToDownload.push({ url: piano.pdf, name: `${songSlug}-piano.pdf` });
+        if (piano.musicxml) filesToDownload.push({ url: piano.musicxml, name: `${songSlug}-piano.musicxml` });
+        if (piano.mid) filesToDownload.push({ url: piano.mid, name: `${songSlug}-piano.mid` });
+    }
 
-    console.log("[ToyyibPay Request Prepared]:", toyyibpayPayload);
+    // 2. Gather Guitar files if selected
+    if (bundleType === 'guitar' || bundleType === 'both') {
+        const guitar = currentSong.instruments.guitar;
+        if (guitar.pdf) filesToDownload.push({ url: guitar.pdf, name: `${songSlug}-guitar.pdf` });
+        if (guitar.musicxml) filesToDownload.push({ url: guitar.musicxml, name: `${songSlug}-guitar.musicxml` });
+        if (guitar.mid) filesToDownload.push({ url: guitar.mid, name: `${songSlug}-guitar.mid` });
+    }
 
-    alert(
-        `[ToyyibPay Secure Checkout]\n` +
-        `-----------------------------------------\n` +
-        `Product: ${title}\n` +
-        `Edition: ${bundleType.toUpperCase()}\n` +
-        `Total Payable: RM ${amountRM}\n` +
-        `Amount in Cents: ${amountInCents}\n\n` +
-        `Redirecting to ToyyibPay Payment Gateway...`
-    );
+    // Guard check: ensure files exist in currentSong
+    if (filesToDownload.length === 0) {
+        alert(`[Test Mode] No files detected for "${title}". Make sure files exist in the sheet folder.`);
+        return;
+    }
+
+    // 3. Sequential automatic download (500ms delay prevents PC & mobile popup blockers)
+    const checkoutBtn = document.getElementById('toyyibpaySubmit');
+    const originalBtnText = checkoutBtn.innerHTML;
+    
+    checkoutBtn.disabled = true;
+    checkoutBtn.innerHTML = `<span>Downloading ${filesToDownload.length} files...</span><strong>In Progress</strong>`;
+
+    filesToDownload.forEach((file, index) => {
+        setTimeout(() => {
+            const link = document.createElement('a');
+            link.href = file.url;
+            link.download = file.name;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+            // When last file finishes, reset button
+            if (index === filesToDownload.length - 1) {
+                setTimeout(() => {
+                    checkoutBtn.disabled = false;
+                    checkoutBtn.innerHTML = originalBtnText;
+                }, 1000);
+            }
+        }, index * 500);
+    });
 }
 
 /* ==========================================================
