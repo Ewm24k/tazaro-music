@@ -101,7 +101,7 @@
         </div>
     </main>
 
-    <!-- MODAL: Sheet Inspection, Retina Page-1 Preview & Native Sound Engine -->
+    <!-- MODAL 1: Sheet Inspection, Retina Page-1 Preview & Native Sound Engine -->
     <div class="modal-overlay" id="previewModal">
         <div class="modal-card">
             <button class="modal-close" id="modalCloseBtn" aria-label="Close Preview">&times;</button>
@@ -234,6 +234,55 @@
 
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: Page-Load Welcome & Catalog Roadmap Notice -->
+    <div class="welcome-overlay" id="welcomeModal">
+        <div class="welcome-card">
+            <button class="welcome-close" id="welcomeCloseBtn" aria-label="Close Notice">&times;</button>
+            
+            <div class="welcome-badge-wrapper">
+                <span class="welcome-badge-icon">𝄢</span>
+                <span class="welcome-badge-text">Tazaro Archive Bulletin</span>
+            </div>
+
+            <h2 class="welcome-title">Welcome to <span class="gradient-text">Tazaro Sheet Music</span></h2>
+            <p class="welcome-subtitle">Platform Status & Catalog Roadmap</p>
+
+            <div class="welcome-points">
+                <!-- Point 1: Piano Exclusive Updates -->
+                <div class="welcome-point-item">
+                    <div class="point-icon piano-accent">🎹</div>
+                    <div class="point-content">
+                        <h4>Current Catalog Focus: Piano Scoring Only</h4>
+                        <p>For this month, our arrangement team is exclusively transcribing and updating <strong>Piano solo scores</strong> in the archive.</p>
+                    </div>
+                </div>
+
+                <!-- Point 2: Guitar Tab System Upgrade -->
+                <div class="welcome-point-item">
+                    <div class="point-icon guitar-accent">🎸</div>
+                    <div class="point-content">
+                        <h4>Guitar Tabs: System Upgrade In Progress</h4>
+                        <p>New guitar tablature releases are temporarily on hold this month for a system engine overhaul. <strong>Guitar tab releases resume next month.</strong></p>
+                    </div>
+                </div>
+
+                <!-- Point 3: Guitarist Application Tip -->
+                <div class="welcome-point-item">
+                    <div class="point-icon tip-accent">💡</div>
+                    <div class="point-content">
+                        <h4>Guitarist Actionable Tip</h4>
+                        <p>Guitarists can directly utilize the <strong>Piano keynotes, lead chords, and MIDI staves</strong> to easily map fretboard fingerings and arrangements right now.</p>
+                    </div>
+                </div>
+            </div>
+
+            <button class="welcome-ack-btn" id="welcomeAckBtn">
+                <span>Enter Catalog & Explore Scores</span>
+                <span class="ack-arrow">→</span>
+            </button>
         </div>
     </div>
 
