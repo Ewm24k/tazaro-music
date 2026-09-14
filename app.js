@@ -19,7 +19,7 @@
  * 5. Reactive Search & Category Chip Filter
  * 6. Dynamic Piano Specification & MuseStudio Reseller License Panel
  * 7. First-Load / Page Refresh Catalog Roadmap Announcement Modal
- * 8. Automatic Test Checkout File Delivery Engine (Option B: Sequential Download)
+ * 8. Repaired Auto-Download Delivery Engine (Blob-based .mxl / .pdf / .mid)
  * 9. Netlify Watermark DOM Killer
  * =======================================================================
  */
@@ -1009,7 +1009,6 @@ function updateModalView() {
     tabPiano.classList.toggle('active', activeInstrument === 'piano');
     tabGuitar.classList.toggle('active', activeInstrument === 'guitar');
 
-    // Dynamic visibility: Display piano information specifically under the Piano tab
     const pianoSpecCard = document.getElementById('pianoSpecCard');
     if (pianoSpecCard) {
         pianoSpecCard.style.display = (activeInstrument === 'piano') ? 'flex' : 'none';
@@ -1046,7 +1045,7 @@ modalCloseBtn.addEventListener('click', () => {
 });
 
 /* ==========================================================
- * 10. TEST CHECKOUT: AUTOMATIC FILE DELIVERY ENGINE (OPTION B)
+ * 10. REPAIRED BLOB-BASED DOWNLOAD ENGINE (PDF, MXL, MID)
  * ========================================================== */
 
 const priceOptions = document.querySelectorAll('.price-option');
@@ -1079,57 +1078,105 @@ document.getElementById('toyyibpaySubmit').addEventListener('click', () => {
     });
 });
 
-function initiateToyyibpayCheckout({ songSlug, title, bundleType, amountRM }) {
+// Helper to reliably trigger a real browser file download using a Blob
+async function downloadFileAsBlob(url, fileName) {
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to load ${url} (HTTP ${response.status})`);
+    }
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = fileName;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    // Clean up memory
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+}
+
+// Extracts actual file extension from path (e.g., 'mxl', 'pdf', 'mid')
+function getPathExtension(filePath) {
+    return filePath.split('.').pop().split('?')[0].toLowerCase();
+}
+
+async function initiateToyyibpayCheckout({ songSlug, title, bundleType, amountRM }) {
     const filesToDownload = [];
 
     // 1. Gather Piano files if selected
     if (bundleType === 'piano' || bundleType === 'both') {
         const piano = currentSong.instruments.piano;
-        if (piano.pdf) filesToDownload.push({ url: piano.pdf, name: `${songSlug}-piano.pdf` });
-        if (piano.musicxml) filesToDownload.push({ url: piano.musicxml, name: `${songSlug}-piano.musicxml` });
-        if (piano.mid) filesToDownload.push({ url: piano.mid, name: `${songSlug}-piano.mid` });
+        if (piano.pdf) {
+            filesToDownload.push({ url: piano.pdf, name: `${songSlug}-piano.${getPathExtension(piano.pdf)}` });
+        }
+        if (piano.musicxml) {
+            // Preserves the exact extension: .mxl, .musicxml, or .xml
+            const ext = getPathExtension(piano.musicxml);
+            filesToDownload.push({ url: piano.musicxml, name: `${songSlug}-piano.${ext}` });
+        }
+        if (piano.mid) {
+            filesToDownload.push({ url: piano.mid, name: `${songSlug}-piano.${getPathExtension(piano.mid)}` });
+        }
     }
 
     // 2. Gather Guitar files if selected
     if (bundleType === 'guitar' || bundleType === 'both') {
         const guitar = currentSong.instruments.guitar;
-        if (guitar.pdf) filesToDownload.push({ url: guitar.pdf, name: `${songSlug}-guitar.pdf` });
-        if (guitar.musicxml) filesToDownload.push({ url: guitar.musicxml, name: `${songSlug}-guitar.musicxml` });
-        if (guitar.mid) filesToDownload.push({ url: guitar.mid, name: `${songSlug}-guitar.mid` });
+        if (guitar.pdf) {
+            filesToDownload.push({ url: guitar.pdf, name: `${songSlug}-guitar.${getPathExtension(guitar.pdf)}` });
+        }
+        if (guitar.musicxml) {
+            const ext = getPathExtension(guitar.musicxml);
+            filesToDownload.push({ url: guitar.musicxml, name: `${songSlug}-guitar.${ext}` });
+        }
+        if (guitar.mid) {
+            filesToDownload.push({ url: guitar.mid, name: `${songSlug}-guitar.${getPathExtension(guitar.mid)}` });
+        }
     }
 
-    // Guard check: ensure files exist in currentSong
     if (filesToDownload.length === 0) {
         alert(`[Test Mode] No files detected for "${title}". Make sure files exist in the sheet folder.`);
         return;
     }
 
-    // 3. Sequential automatic download (500ms delay prevents PC & mobile popup blockers)
     const checkoutBtn = document.getElementById('toyyibpaySubmit');
     const originalBtnText = checkoutBtn.innerHTML;
-    
+
     checkoutBtn.disabled = true;
-    checkoutBtn.innerHTML = `<span>Downloading ${filesToDownload.length} files...</span><strong>In Progress</strong>`;
+    checkoutBtn.style.opacity = '0.7';
 
-    filesToDownload.forEach((file, index) => {
-        setTimeout(() => {
-            const link = document.createElement('a');
-            link.href = file.url;
-            link.download = file.name;
-            link.style.display = 'none';
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
+    try {
+        // 3. Sequentially download each file as a real Blob with an 800ms gap
+        // to completely avoid browser multi-download blocking
+        for (let i = 0; i < filesToDownload.length; i++) {
+            const item = filesToDownload[i];
+            checkoutBtn.innerHTML = `<span>Downloading file ${i + 1} of ${filesToDownload.length} (${item.name.split('.').pop().toUpperCase()})...</span><strong>Please wait</strong>`;
+            
+            await downloadFileAsBlob(item.url, item.name);
 
-            // When last file finishes, reset button
-            if (index === filesToDownload.length - 1) {
-                setTimeout(() => {
-                    checkoutBtn.disabled = false;
-                    checkoutBtn.innerHTML = originalBtnText;
-                }, 1000);
+            if (i < filesToDownload.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 800));
             }
-        }, index * 500);
-    });
+        }
+
+        checkoutBtn.innerHTML = `<span>All ${filesToDownload.length} files downloaded!</span><strong>✓ Complete</strong>`;
+        setTimeout(() => {
+            checkoutBtn.disabled = false;
+            checkoutBtn.style.opacity = '1';
+            checkoutBtn.innerHTML = originalBtnText;
+        }, 1500);
+
+    } catch (err) {
+        console.error('[Download Error]:', err);
+        checkoutBtn.disabled = false;
+        checkoutBtn.style.opacity = '1';
+        checkoutBtn.innerHTML = originalBtnText;
+        alert(`Could not download file: ${err.message}. Please verify the file path exists on the server.`);
+    }
 }
 
 /* ==========================================================
@@ -1143,7 +1190,6 @@ function initWelcomeAnnouncementModal() {
 
     if (!welcomeModal) return;
 
-    // Display notice popup automatically upon every page load / refresh
     welcomeModal.classList.add('active');
 
     const closeWelcomeModal = () => {
