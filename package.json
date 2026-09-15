@@ -1,0 +1,11 @@
+{
+  "name": "tazaro-music-sheet",
+  "version": "1.0.0",
+  "description": "Tazaro Music Sheet Engine",
+  "scripts": {
+    "build": "echo 'Build complete'"
+  },
+  "dependencies": {
+    "stripe": "^17.0.0"
+  }
+}
