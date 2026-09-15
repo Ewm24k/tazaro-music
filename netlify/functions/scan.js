@@ -4,7 +4,8 @@ const path = require('path');
 exports.handler = async function (event, context) {
     // Resolve path to the sheet folder
     const baseDir = path.resolve(__dirname, '../../sheet');
-    const allowedExtensions = ['.pdf', '.xml', '.musicxml', '.mxl', '.mid', '.midi'];
+    // Scores and image thumbnails (.png, .jpg, .jpeg, .webp)
+    const allowedExtensions = ['.pdf', '.xml', '.musicxml', '.mxl', '.mid', '.midi', '.png', '.jpg', '.jpeg', '.webp'];
     const discoveredFiles = [];
     const instruments = ['piano', 'guitar'];
 
