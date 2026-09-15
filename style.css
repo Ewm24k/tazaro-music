@@ -388,7 +388,7 @@ body {
 }
 
 /* ==========================================================
-   DYNAMIC MUSIC CARDS
+   DYNAMIC MUSIC CARDS & THUMBNAILS
    ========================================================== */
 .song-grid {
     display: grid;
@@ -400,7 +400,7 @@ body {
     background: var(--card-bg);
     border: 1px solid var(--card-border);
     border-radius: var(--radius-md);
-    padding: 1.35rem;
+    padding: 1.25rem;
     cursor: pointer;
     display: flex;
     flex-direction: column;
@@ -435,21 +435,56 @@ body {
     transform: scale(0.98);
 }
 
+/* Header Section inside Card */
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.8rem;
+}
+
+/* FIXED-SIZE THUMBNAIL CONTAINER */
+.card-thumbnail-box {
+    width: 100%;
+    height: 185px; /* Fixed height across all cards */
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    position: relative;
+    background: #0B0E14;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 1rem;
+}
+
+.card-thumbnail-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* Fits any resolution or ratio cleanly */
+    object-position: center;
+    display: block;
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.song-card:hover .card-thumbnail-img {
+    transform: scale(1.06);
+}
+
+/* Fallback Classical Motif (when no thumbnail is uploaded) */
 .card-art-motif {
     width: 100%;
-    height: 64px;
+    height: 90px;
     background: var(--card-art-bg);
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: var(--radius-sm);
-    margin-bottom: 1.1rem;
+    margin-bottom: 1rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 1rem;
+    padding: 0 1.25rem;
 }
 .motif-symbol {
-    font-size: 1.8rem;
-    color: rgba(212, 175, 55, 0.4);
+    font-size: 2.2rem;
+    color: rgba(212, 175, 55, 0.45);
     font-family: var(--font-heading);
 }
 .motif-format-badge {
@@ -464,7 +499,6 @@ body {
 .card-badges {
     display: flex;
     gap: 0.45rem;
-    margin-bottom: 0.8rem;
     flex-wrap: wrap;
 }
 .badge-piano {
@@ -492,6 +526,12 @@ body {
     font-size: 0.68rem;
     padding: 2px 7px;
     border-radius: 4px;
+}
+
+.card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 .song-card h3 {
@@ -1005,7 +1045,7 @@ body {
 .option-desc { font-size: 0.72rem; color: var(--text-muted); }
 .option-price { font-family: var(--font-heading); font-size: 1.15rem; color: var(--accent-gold-light); }
 
-/* Modern Luxury Customer Input Fields */
+/* Modern Customer Input Fields */
 .customer-info-box {
     margin: 1rem 0 0.5rem;
     background: rgba(255, 255, 255, 0.025);
@@ -1364,6 +1404,10 @@ body {
     }
     .catalog-path-indicator {
         display: none;
+    }
+
+    .card-thumbnail-box {
+        height: 165px; /* Slightly more compact for mobile views */
     }
 
     .modal-overlay {
