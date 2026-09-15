@@ -2,26 +2,6 @@
  * =======================================================================
  * TAZARO MUSIC SHEET — CORE PLATFORM ENGINE
  * =======================================================================
- * Features:
- * 1. Strictly Forced MusicXML Score Arrangement Engine:
- *    - Automated DTD Header Sanitizer to prevent XML parser entity failures.
- *    - JSZip auto-unpacker for compressed .mxl / .musicxml packages.
- *    - Independent Multi-Part Parallel Timeline Parsing (Left Hand & Right Hand
- *      staves play synchronized together at t=0s).
- *    - Case-insensitive, namespace-agnostic DOM extraction.
- *    - Completely purged all "MIDI" labels from player UI across phone & PC.
- * 2. Authentic Dual Instrument Soundbanks:
- *    - Piano: Real Yamaha/Steinway Concert Grand (_tone_0000_JCLive_sf2_file)
- *    - Guitar: Real Steel-String Acoustic Guitar (_tone_0250_JCLive_sf2_file)
- *              with Nylon backup (_tone_0240_JCLive_sf2_file) + Zero-Wait Pluck Fallback
- * 3. Master Limiter/Compressor Bus to prevent speaker clipping on dense chords
- * 4. Retina High-DPI Page-1 PDF Rendering Sandbox (PDF.js)
- * 5. Reactive Search & Category Chip Filter
- * 6. Dynamic Piano Specification & MuseStudio Reseller License Panel
- * 7. First-Load / Page Refresh Catalog Roadmap Announcement Modal
- * 8. ToyyibPay Secure API Payment Bridge Hook (Zero Personal Info Exposed)
- * 9. Netlify Watermark DOM Killer
- * =======================================================================
  */
 
 // Initialize PDF.js Web Worker
@@ -159,12 +139,8 @@ function playFallbackGuitarString(ctx, midiNote, when, duration, velocity = 0.8)
  * 2. NATIVE MUSICXML SCORE PARSER
  * ========================================================== */
 
-/**
- * Extracts raw XML text whether it is plain text XML or a compressed ZIP (.mxl)
- */
 async function extractMusicXMLText(arrayBuffer) {
     const uint8 = new Uint8Array(arrayBuffer.slice(0, 4));
-    // Check ZIP signature: 'PK\x03\x04'
     if (uint8[0] === 0x50 && uint8[1] === 0x4B && window.JSZip) {
         const zip = await JSZip.loadAsync(arrayBuffer);
         for (const filename of Object.keys(zip.files)) {
@@ -177,9 +153,6 @@ async function extractMusicXMLText(arrayBuffer) {
     return decoder.decode(arrayBuffer);
 }
 
-/**
- * Parses MusicXML data with sanitized DTD handling and parallel part synchronization
- */
 function parseMusicXMLToNotes(rawXmlString) {
     const cleanXml = rawXmlString.replace(/<!DOCTYPE[\s\S]*?>/gi, '');
 
@@ -665,7 +638,7 @@ async function renderSecureFirstPage(pdfUrl) {
 }
 
 /* ==========================================================
- * 8. AUTHENTIC AUDIO CONTROLLER (PURGED OF ALL "MIDI" LABELS)
+ * 8. AUTHENTIC AUDIO CONTROLLER
  * ========================================================== */
 
 const playBtn = document.getElementById('playAudioBtn');
@@ -729,7 +702,7 @@ async function toggleAudioPlayback() {
 
                     const now = ctx.currentTime + 0.08;
                     playbackStartTime = now;
-                    currentTrackDuration = Math.min(parsedScore.duration || 30, 45); // 45s preview
+                    currentTrackDuration = Math.min(parsedScore.duration || 30, 45);
 
                     const timeSlotCounter = {};
 
@@ -768,7 +741,7 @@ async function toggleAudioPlayback() {
         }
     }
 
-    // 2. BACKGROUND COMPANION PLAYBACK (SILENT TECHNICAL FALLBACK)
+    // 2. BACKGROUND COMPANION PLAYBACK
     if (currentMidiFile && window.Midi) {
         try {
             audioStatus.textContent = "Preparing Score Audio...";
@@ -823,7 +796,7 @@ async function toggleAudioPlayback() {
         }
     }
 
-    // 3. SOUND PROGRESSION DEMO (IF FILES ARE MISSING)
+    // 3. SOUND PROGRESSION DEMO FALLBACK
     stopAudioPlayback(false);
     isPlaying = true;
     updateAudioStatusLabel();
@@ -1009,7 +982,6 @@ function updateModalView() {
     tabPiano.classList.toggle('active', activeInstrument === 'piano');
     tabGuitar.classList.toggle('active', activeInstrument === 'guitar');
 
-    // Dynamic visibility: Display piano information specifically under the Piano tab
     const pianoSpecCard = document.getElementById('pianoSpecCard');
     if (pianoSpecCard) {
         pianoSpecCard.style.display = (activeInstrument === 'piano') ? 'flex' : 'none';
@@ -1046,7 +1018,7 @@ modalCloseBtn.addEventListener('click', () => {
 });
 
 /* ==========================================================
- * 10. COMMERCE & TOYYIBPAY GATEWAY DISPATCH
+ * 10. COMMERCE & STRIPE CHECKOUT GATEWAY DISPATCH
  * ========================================================== */
 
 const priceOptions = document.querySelectorAll('.price-option');
@@ -1068,39 +1040,42 @@ priceOptions.forEach(opt => {
     });
 });
 
-document.getElementById('toyyibpaySubmit').addEventListener('click', () => {
-    if (!currentSong) return;
+const checkoutBtn = document.getElementById('checkoutSubmit') || document.getElementById('toyyibpaySubmit');
+if (checkoutBtn) {
+    checkoutBtn.addEventListener('click', () => {
+        if (!currentSong) return;
 
-    const payerName = document.getElementById('custName')?.value.trim();
-    const payerEmail = document.getElementById('custEmail')?.value.trim();
-    const payerPhone = document.getElementById('custPhone')?.value.trim();
+        const payerName = document.getElementById('custName')?.value.trim();
+        const payerEmail = document.getElementById('custEmail')?.value.trim();
+        const payerPhone = document.getElementById('custPhone')?.value.trim();
 
-    if (!payerName || !payerEmail || !payerPhone) {
-        alert("Please fill in your Name, Email, and Phone Number before proceeding to payment.");
-        return;
-    }
+        if (!payerEmail) {
+            alert("Please provide a valid Email Address to receive your score fulfillment.");
+            return;
+        }
 
-    initiateToyyibpayCheckout({
-        songSlug: currentSong.slug,
-        title: currentSong.title,
-        bundleType: selectedBundle,
-        amountRM: selectedPrice,
-        payerName: payerName,
-        payerEmail: payerEmail,
-        payerPhone: payerPhone
+        initiateStripeCheckout({
+            songSlug: currentSong.slug,
+            title: currentSong.title,
+            bundleType: selectedBundle,
+            amountRM: selectedPrice,
+            payerName: payerName,
+            payerEmail: payerEmail,
+            payerPhone: payerPhone
+        });
     });
-});
+}
 
-async function initiateToyyibpayCheckout({ songSlug, title, bundleType, amountRM, payerName, payerEmail, payerPhone }) {
-    const checkoutBtn = document.getElementById('toyyibpaySubmit');
-    const originalBtnText = checkoutBtn.innerHTML;
+async function initiateStripeCheckout({ songSlug, title, bundleType, amountRM, payerName, payerEmail, payerPhone }) {
+    const btn = document.getElementById('checkoutSubmit') || document.getElementById('toyyibpaySubmit');
+    const originalBtnText = btn.innerHTML;
 
-    checkoutBtn.disabled = true;
-    checkoutBtn.style.opacity = '0.7';
-    checkoutBtn.innerHTML = `<span>Connecting to FPX Gateway...</span><strong>Please wait</strong>`;
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+    btn.innerHTML = `<span>Connecting to Secure Checkout...</span><strong>Please wait</strong>`;
 
     try {
-        const response = await fetch('/.netlify/functions/create-bill', {
+        const response = await fetch('/.netlify/functions/create-checkout-session', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1116,18 +1091,18 @@ async function initiateToyyibpayCheckout({ songSlug, title, bundleType, amountRM
 
         const data = await response.json();
 
-        if (!response.ok || !data.paymentUrl) {
-            throw new Error(data.error || 'Failed to initialize payment session.');
+        if (!response.ok || !data.checkoutUrl) {
+            throw new Error(data.error || 'Failed to initialize Stripe checkout session.');
         }
 
-        // Direct redirect to ToyyibPay FPX gateway
-        window.location.href = data.paymentUrl;
+        // Redirect directly to Stripe Hosted Checkout
+        window.location.href = data.checkoutUrl;
 
     } catch (err) {
-        console.error('[ToyyibPay Error]:', err);
-        checkoutBtn.disabled = false;
-        checkoutBtn.style.opacity = '1';
-        checkoutBtn.innerHTML = originalBtnText;
+        console.error('[Stripe Error]:', err);
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.innerHTML = originalBtnText;
         alert(err.message);
     }
 }
