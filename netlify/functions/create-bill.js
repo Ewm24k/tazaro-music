@@ -19,7 +19,7 @@ exports.handler = async (event) => {
         // ToyyibPay requires amount in CENTS (Sen): RM 5.00 -> 500, RM 10.00 -> 1000
         const amountInCents = Math.round(parseFloat(amountRM) * 100);
 
-        // Strict 30-character limit on billName (ToyyibPay API constraint)
+        // Strict 30-character limit on billName
         const safeTitle = (title || 'Music Sheet').replace(/[^a-zA-Z0-9 ]/g, '').trim();
         const billName = `TAZ ${safeTitle}`.substring(0, 30);
 
@@ -44,10 +44,14 @@ exports.handler = async (event) => {
         payload.append('billCallbackUrl', callbackUrl);
         payload.append('billExternalReferenceNo', orderRef);
 
-        // 1. HIDE PERSONAL MERCHANT INFO FROM BILL HEADER
-        payload.append('billDisplayMerchant', '0');
+        // 1. CHARGE FPX TRANSACTION FEE TO CUSTOMER (Not owner)
+        // '1' = Customer pays the RM 1.00 fee; merchant gets 100% of product price
+        payload.append('billChargeToCustomer', '1');
 
-        // 2. ACTUAL CUSTOMER INFORMATION (Prevents locked input boxes)
+        // 2. PAYMENT CHANNEL (0 = FPX Online Banking)
+        payload.append('billPaymentChannel', '0');
+
+        // 3. CUSTOMER DETAILS (Pre-filled from Tazaro's modal)
         payload.append('billTo', (payerName || 'Customer').substring(0, 30));
         payload.append('billEmail', payerEmail || 'customer@gmail.com');
         payload.append('billPhone', payerPhone || '0123456789');
