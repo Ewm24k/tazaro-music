@@ -18,8 +18,12 @@ exports.handler = async (event) => {
             };
         }
 
-        // ToyyibPay requires amount in CENTS (Sen): RM 5.00 -> 500, RM 10.00 -> 1000
+        // ToyyibPay strictly requires amount in CENTS (Sen): RM 5.00 -> 500, RM 10.00 -> 1000
         const amountInCents = Math.round(parseFloat(amountRM) * 100);
+
+        // Strict 30-character limit on billName (ToyyibPay constraint)
+        const safeTitle = (title || 'Music Sheet').replace(/[^a-zA-Z0-9 ]/g, '').trim();
+        const billName = `TAZ ${safeTitle}`.substring(0, 30);
 
         // Detect current site URL dynamically
         const host = event.headers.host;
@@ -28,20 +32,25 @@ exports.handler = async (event) => {
 
         const returnUrl = `${siteUrl}/success.html?song=${encodeURIComponent(songSlug)}&edition=${encodeURIComponent(bundleType)}`;
         const callbackUrl = `${siteUrl}/.netlify/functions/toyyibpay-callback`;
-        const orderRef = `TAZ-${songSlug}-${bundleType}-${Date.now()}`;
+        const orderRef = `TAZ-${Date.now().toString().slice(-8)}`;
 
-        // Prepare standard URL-encoded form body for ToyyibPay API
+        // Prepare standard URL-encoded form body
         const payload = new URLSearchParams();
-        payload.append('userSecretKey', secretKey);
-        payload.append('categoryCode', categoryCode);
-        payload.append('billName', `Tazaro: ${title.substring(0, 30)}`);
-        payload.append('billDescription', `${bundleType.toUpperCase()} Edition (PDF, MXL, MID)`);
-        payload.append('billPriceSetting', '1');
-        payload.append('billPayorInfo', '0'); // 0 = ToyyibPay collects payer details on their payment gateway
+        payload.append('userSecretKey', secretKey.trim());
+        payload.append('categoryCode', categoryCode.trim());
+        payload.append('billName', billName);
+        payload.append('billDescription', `${bundleType.toUpperCase()} Edition (PDF, MXL, MID)`.substring(0, 100));
+        payload.append('billPriceSetting', '1'); // 1 = Fixed amount
+        payload.append('billPayorInfo', '1');    // 1 = Allow customer to enter/edit their real details on checkout
         payload.append('billAmount', amountInCents.toString());
         payload.append('billReturnUrl', returnUrl);
         payload.append('billCallbackUrl', callbackUrl);
         payload.append('billExternalReferenceNo', orderRef);
+
+        // MANDATORY FIELDS FOR TOYYIBPAY (Defaults provided, user can edit on FPX gateway screen)
+        payload.append('billTo', 'Valued Customer');
+        payload.append('billEmail', 'customer@tazaro.com');
+        payload.append('billPhone', '0123456789');
 
         const response = await fetch('https://toyyibpay.com/index.php/api/createBill', {
             method: 'POST',
@@ -49,9 +58,18 @@ exports.handler = async (event) => {
             body: payload.toString()
         });
 
-        const data = await response.json();
+        const rawText = await response.text();
+        let data;
+        try {
+            data = JSON.parse(rawText);
+        } catch (e) {
+            return {
+                statusCode: 400,
+                body: JSON.stringify({ error: 'ToyyibPay returned non-JSON response', raw: rawText })
+            };
+        }
 
-        // ToyyibPay returns: [{"BillCode": "abcdef12"}]
+        // ToyyibPay returns an array on success: [{"BillCode": "abcdef12"}]
         if (Array.isArray(data) && data[0] && data[0].BillCode) {
             const billCode = data[0].BillCode;
             return {
@@ -63,9 +81,11 @@ exports.handler = async (event) => {
                 })
             };
         } else {
+            // Extracts exact ToyyibPay error message (e.g. invalid category, invalid secret key, etc.)
+            const errorMessage = (Array.isArray(data) && data[0]?.msg) || JSON.stringify(data);
             return {
                 statusCode: 400,
-                body: JSON.stringify({ error: 'ToyyibPay rejected bill creation', details: data })
+                body: JSON.stringify({ error: `ToyyibPay Error: ${errorMessage}`, rawData: data })
             };
         }
 
