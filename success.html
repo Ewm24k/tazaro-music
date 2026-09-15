@@ -130,7 +130,7 @@
 
     <script>
         const params = new URLSearchParams(window.location.search);
-        const statusId = params.get('status_id');
+        const sessionId = params.get('session_id');
         const songSlug = params.get('song');
         const edition = params.get('edition') || 'piano';
 
@@ -140,42 +140,55 @@
         const downloadBtn = document.getElementById('downloadBtn');
         const downloadBox = document.getElementById('downloadBox');
 
-        // ToyyibPay status_id: 1 = Success, 2 = Pending, 3 = Failed
-        if (statusId === '3') {
+        if (!songSlug) {
             statusIcon.textContent = '✕';
             statusIcon.style.color = '#EF4444';
             statusIcon.style.borderColor = '#EF4444';
-            statusTitle.textContent = 'Payment Unsuccessful';
-            statusDesc.textContent = 'The bank transaction was cancelled or declined. Please try again.';
+            statusTitle.textContent = 'Order Not Found';
+            statusDesc.textContent = 'No active order detected. Please return to the catalog and select a score.';
             downloadBtn.style.display = 'none';
             downloadBox.style.display = 'none';
         } else {
-            // Success (status_id === '1' or direct testing)
             async function downloadAllFiles() {
                 downloadBtn.disabled = true;
                 downloadBtn.textContent = 'Packaging files, please wait...';
 
                 try {
                     const zip = new JSZip();
-                    const folder = zip.folder(`Tazaro-${songSlug}-${edition}`);
+                    const mainFolder = zip.folder(`Tazaro-${songSlug}-${edition}`);
 
-                    const fileList = [
-                        { path: `sheet/${edition}/${songSlug}.pdf`, name: `${songSlug}-score.pdf` },
-                        { path: `sheet/${edition}/${songSlug}.mxl`, name: `${songSlug}-score.mxl` },
-                        { path: `sheet/${edition}/${songSlug}.mid`, name: `${songSlug}-sequence.mid` }
-                    ];
+                    // Handle 'both' bundle vs solo instrument
+                    let fileList = [];
+                    if (edition === 'both') {
+                        fileList.push(
+                            { path: `sheet/piano/${songSlug}.pdf`, name: `piano/${songSlug}-piano.pdf` },
+                            { path: `sheet/piano/${songSlug}.mxl`, name: `piano/${songSlug}-piano.mxl` },
+                            { path: `sheet/piano/${songSlug}.mid`, name: `piano/${songSlug}-piano.mid` },
+                            { path: `sheet/guitar/${songSlug}.pdf`, name: `guitar/${songSlug}-guitar.pdf` },
+                            { path: `sheet/guitar/${songSlug}.mxl`, name: `guitar/${songSlug}-guitar.mxl` },
+                            { path: `sheet/guitar/${songSlug}.mid`, name: `guitar/${songSlug}-guitar.mid` }
+                        );
+                    } else {
+                        fileList.push(
+                            { path: `sheet/${edition}/${songSlug}.pdf`, name: `${songSlug}-score.pdf` },
+                            { path: `sheet/${edition}/${songSlug}.mxl`, name: `${songSlug}-score.mxl` },
+                            { path: `sheet/${edition}/${songSlug}.mid`, name: `${songSlug}-sequence.mid` }
+                        );
+                    }
 
                     for (const item of fileList) {
                         try {
                             const res = await fetch(item.path);
                             if (res.ok) {
                                 const blob = await res.blob();
-                                folder.file(item.name, blob);
+                                mainFolder.file(item.name, blob);
                             }
-                        } catch (e) {}
+                        } catch (e) {
+                            console.warn('File packaging skip:', item.path);
+                        }
                     }
 
-                    folder.file("LICENSE.txt", 
+                    mainFolder.file("LICENSE.txt", 
                         `TAZARO MUSIC SHEET — VERIFIED REPERTOIRE ARCHIVE\n` +
                         `Song: ${songSlug}\n` +
                         `Edition: ${edition.toUpperCase()}\n` +
@@ -203,7 +216,6 @@
 
             downloadBtn.addEventListener('click', downloadAllFiles);
 
-            // Trigger auto-download once page loads
             window.addEventListener('DOMContentLoaded', () => {
                 setTimeout(downloadAllFiles, 1000);
             });
