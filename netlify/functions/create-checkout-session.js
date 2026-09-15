@@ -35,6 +35,8 @@ exports.handler = async (event) => {
             : `${bundleType.charAt(0).toUpperCase() + bundleType.slice(1)} Edition`;
 
         // Create Stripe Checkout Session
+        // By omitting automatic_payment_methods, Stripe automatically pulls
+        // enabled methods (Cards, Apple Pay, Google Pay, GrabPay) directly from your Dashboard settings.
         const session = await stripe.checkout.sessions.create({
             mode: 'payment',
             customer_email: payerEmail,
@@ -51,10 +53,6 @@ exports.handler = async (event) => {
                     quantity: 1,
                 }
             ],
-            // Dynamically presents Credit/Debit Cards, Apple Pay, Google Pay, and GrabPay
-            automatic_payment_methods: {
-                enabled: true
-            },
             success_url: `${siteUrl}/success.html?session_id={CHECKOUT_SESSION_ID}&song=${encodeURIComponent(songSlug)}&edition=${encodeURIComponent(bundleType)}`,
             cancel_url: `${siteUrl}/`,
             metadata: {
