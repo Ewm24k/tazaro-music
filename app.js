@@ -19,7 +19,7 @@
  * 5. Reactive Search & Category Chip Filter
  * 6. Dynamic Piano Specification & MuseStudio Reseller License Panel
  * 7. First-Load / Page Refresh Catalog Roadmap Announcement Modal
- * 8. ToyyibPay Secure API Payment Bridge Hook (Netlify Serverless)
+ * 8. ToyyibPay Secure API Payment Bridge Hook (Zero Personal Info Exposed)
  * 9. Netlify Watermark DOM Killer
  * =======================================================================
  */
@@ -1009,6 +1009,7 @@ function updateModalView() {
     tabPiano.classList.toggle('active', activeInstrument === 'piano');
     tabGuitar.classList.toggle('active', activeInstrument === 'guitar');
 
+    // Dynamic visibility: Display piano information specifically under the Piano tab
     const pianoSpecCard = document.getElementById('pianoSpecCard');
     if (pianoSpecCard) {
         pianoSpecCard.style.display = (activeInstrument === 'piano') ? 'flex' : 'none';
@@ -1070,21 +1071,33 @@ priceOptions.forEach(opt => {
 document.getElementById('toyyibpaySubmit').addEventListener('click', () => {
     if (!currentSong) return;
 
+    const payerName = document.getElementById('custName')?.value.trim();
+    const payerEmail = document.getElementById('custEmail')?.value.trim();
+    const payerPhone = document.getElementById('custPhone')?.value.trim();
+
+    if (!payerName || !payerEmail || !payerPhone) {
+        alert("Please fill in your Name, Email, and Phone Number before proceeding to payment.");
+        return;
+    }
+
     initiateToyyibpayCheckout({
         songSlug: currentSong.slug,
         title: currentSong.title,
         bundleType: selectedBundle,
-        amountRM: selectedPrice
+        amountRM: selectedPrice,
+        payerName: payerName,
+        payerEmail: payerEmail,
+        payerPhone: payerPhone
     });
 });
 
-async function initiateToyyibpayCheckout({ songSlug, title, bundleType, amountRM }) {
+async function initiateToyyibpayCheckout({ songSlug, title, bundleType, amountRM, payerName, payerEmail, payerPhone }) {
     const checkoutBtn = document.getElementById('toyyibpaySubmit');
     const originalBtnText = checkoutBtn.innerHTML;
 
     checkoutBtn.disabled = true;
     checkoutBtn.style.opacity = '0.7';
-    checkoutBtn.innerHTML = `<span>Connecting to ToyyibPay...</span><strong>Please wait</strong>`;
+    checkoutBtn.innerHTML = `<span>Connecting to FPX Gateway...</span><strong>Please wait</strong>`;
 
     try {
         const response = await fetch('/.netlify/functions/create-bill', {
@@ -1094,7 +1107,10 @@ async function initiateToyyibpayCheckout({ songSlug, title, bundleType, amountRM
                 songSlug,
                 title,
                 bundleType,
-                amountRM
+                amountRM,
+                payerName,
+                payerEmail,
+                payerPhone
             })
         });
 
@@ -1104,7 +1120,7 @@ async function initiateToyyibpayCheckout({ songSlug, title, bundleType, amountRM
             throw new Error(data.error || 'Failed to initialize payment session.');
         }
 
-        // Direct redirection to the secure ToyyibPay FPX payment screen
+        // Direct redirect to ToyyibPay FPX gateway
         window.location.href = data.paymentUrl;
 
     } catch (err) {
@@ -1112,7 +1128,7 @@ async function initiateToyyibpayCheckout({ songSlug, title, bundleType, amountRM
         checkoutBtn.disabled = false;
         checkoutBtn.style.opacity = '1';
         checkoutBtn.innerHTML = originalBtnText;
-        alert(`Payment Error: ${err.message}\n\nPlease verify that your TOYYIBPAY_SECRET_KEY is configured in Netlify Environment Variables.`);
+        alert(err.message);
     }
 }
 
