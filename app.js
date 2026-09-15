@@ -1,24 +1,6 @@
 /**
  * =======================================================================
- * TAZARO MUSIC SHEET — CORE PLATFORM ENGINE
- * =======================================================================
- * Features:
- * 1. Strictly Forced MusicXML Score Arrangement Engine:
- *    - Automated DTD Header Sanitizer to prevent XML parser entity failures.
- *    - JSZip auto-unpacker for compressed .mxl / .musicxml packages.
- *    - Independent Multi-Part Parallel Timeline Parsing (Left Hand & Right Hand
- *      staves play synchronized together at t=0s).
- *    - Case-insensitive, namespace-agnostic DOM extraction.
- * 2. Authentic Dual Instrument Soundbanks:
- *    - Piano: Real Yamaha/Steinway Concert Grand (_tone_0000_JCLive_sf2_file)
- *    - Guitar: Real Steel-String Acoustic Guitar (_tone_0250_JCLive_sf2_file)
- *              with Nylon backup (_tone_0240_JCLive_sf2_file) + Zero-Wait Pluck Fallback
- * 3. Master Limiter/Compressor Bus to prevent speaker clipping on dense chords
- * 4. Retina High-DPI Page-1 PDF Rendering Sandbox (PDF.js)
- * 5. Dynamic Cover Thumbnail Engine (Placed right after the header motif)
- * 6. Reactive Search & Category Chip Filter
- * 7. Stripe Hosted Checkout Engine (Cards, Apple Pay, Google Pay, GrabPay)
- * 8. Netlify Watermark DOM Killer
+ * TAZARO MUSIC SHEET — CORE PLATFORM ENGINE (FIXED AUDIO & TIMELINE)
  * =======================================================================
  */
 
@@ -71,9 +53,6 @@ function getAudioContext() {
 
         audioCtx.masterBus = compressor;
     }
-    if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-    }
     if (!soundFontPlayer && window.WebAudioFontPlayer) {
         soundFontPlayer = new WebAudioFontPlayer();
     }
@@ -97,60 +76,72 @@ function primeInstrument(type) {
     const ctx = getAudioContext();
     const preset = getInstrumentPreset(type);
     if (soundFontPlayer && preset) {
-        soundFontPlayer.adjustPreset(ctx, preset);
+        try {
+            if (typeof soundFontPlayer.adjustPreset === 'function') {
+                soundFontPlayer.adjustPreset(ctx, preset);
+            } else if (soundFontPlayer.loader && typeof soundFontPlayer.loader.decodeAfterLoading === 'function') {
+                soundFontPlayer.loader.decodeAfterLoading(ctx, preset);
+            }
+        } catch (e) {
+            console.warn('[AudioEngine] Preset adjust fallback:', e);
+        }
     }
 }
 
 function playFallbackGuitarString(ctx, midiNote, when, duration, velocity = 0.8) {
-    const freq = 440 * Math.pow(2, (midiNote - 69) / 12);
-    const outGain = ctx.createGain();
-    const filter = ctx.createBiquadFilter();
+    try {
+        const freq = 440 * Math.pow(2, (midiNote - 69) / 12);
+        const outGain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
 
-    filter.type = 'lowpass';
-    filter.Q.setValueAtTime(2.2, when);
-    filter.frequency.setValueAtTime(4500, when);
-    filter.frequency.exponentialRampToValueAtTime(Math.min(freq * 3.5, 900), when + 0.12);
+        filter.type = 'lowpass';
+        filter.Q.setValueAtTime(2.2, when);
+        filter.frequency.setValueAtTime(4500, when);
+        filter.frequency.exponentialRampToValueAtTime(Math.min(freq * 3.5, 900), when + 0.12);
 
-    filter.connect(outGain);
-    outGain.connect(ctx.masterBus || ctx.destination);
+        filter.connect(outGain);
+        outGain.connect(ctx.masterBus || ctx.destination);
 
-    const osc1 = ctx.createOscillator();
-    const osc2 = ctx.createOscillator();
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
 
-    osc1.type = 'triangle';
-    osc2.type = 'sawtooth';
+        osc1.type = 'triangle';
+        osc2.type = 'sawtooth';
 
-    osc1.frequency.setValueAtTime(freq, when);
-    osc2.frequency.setValueAtTime(freq, when);
+        osc1.frequency.setValueAtTime(freq, when);
+        osc2.frequency.setValueAtTime(freq, when);
 
-    const g1 = ctx.createGain();
-    const g2 = ctx.createGain();
-    g1.gain.setValueAtTime(0.7, when);
-    g2.gain.setValueAtTime(0.2, when);
+        const g1 = ctx.createGain();
+        const g2 = ctx.createGain();
+        g1.gain.setValueAtTime(0.7, when);
+        g2.gain.setValueAtTime(0.2, when);
 
-    osc1.connect(g1);
-    osc2.connect(g2);
-    g1.connect(filter);
-    g2.connect(filter);
+        osc1.connect(g1);
+        osc2.connect(g2);
+        g1.connect(filter);
+        g2.connect(filter);
 
-    const attack = 0.003;
-    const decay = Math.min(Math.max(duration, 0.7), 2.8);
-    const peak = Math.min(velocity * 0.45, 0.6);
+        const attack = 0.003;
+        const decay = Math.min(Math.max(duration, 0.7), 2.8);
+        const peak = Math.min(velocity * 0.45, 0.6);
 
-    outGain.gain.setValueAtTime(0.0001, when);
-    outGain.gain.linearRampToValueAtTime(peak, when + attack);
-    outGain.gain.exponentialRampToValueAtTime(0.0001, when + decay);
+        outGain.gain.setValueAtTime(0.0001, when);
+        outGain.gain.linearRampToValueAtTime(peak, when + attack);
+        outGain.gain.exponentialRampToValueAtTime(0.0001, when + decay);
 
-    osc1.start(when);
-    osc2.start(when);
-    osc1.stop(when + decay);
-    osc2.stop(when + decay);
+        osc1.start(when);
+        osc2.start(when);
+        osc1.stop(when + decay);
+        osc2.stop(when + decay);
 
-    activeFallbackNodes.push({
-        stop: () => {
-            try { osc1.stop(); osc2.stop(); outGain.disconnect(); } catch (e) {}
-        }
-    });
+        activeFallbackNodes.push({
+            stop: () => {
+                try { osc1.stop(); osc2.stop(); outGain.disconnect(); } catch (e) {}
+            }
+        });
+    } catch (err) {
+        console.warn('Fallback note schedule error:', err);
+    }
 }
 
 /* ==========================================================
@@ -159,10 +150,13 @@ function playFallbackGuitarString(ctx, midiNote, when, duration, velocity = 0.8)
 
 async function extractMusicXMLText(arrayBuffer) {
     const uint8 = new Uint8Array(arrayBuffer.slice(0, 4));
+    // Check ZIP header: 'PK\x03\x04'
     if (uint8[0] === 0x50 && uint8[1] === 0x4B && window.JSZip) {
         const zip = await JSZip.loadAsync(arrayBuffer);
         for (const filename of Object.keys(zip.files)) {
-            if (filename.toLowerCase().endsWith('.xml') && !filename.includes('container.xml')) {
+            const lower = filename.toLowerCase();
+            // Match both .xml and .musicxml (MuseScore 4 default)
+            if ((lower.endsWith('.xml') || lower.endsWith('.musicxml')) && !lower.includes('container.xml')) {
                 return await zip.files[filename].async('text');
             }
         }
@@ -572,7 +566,7 @@ function renderCatalog(items) {
             priceTagHTML = 'RM 5.00 Solo Edition';
         }
 
-        // New thumbnail image: rendered directly below the header box
+        // Dedicated Cover Thumbnail directly below the motif header
         const thumbnailHTML = song.thumbnail ? `
             <div class="card-thumbnail-box">
                 <img src="${song.thumbnail}" 
@@ -592,7 +586,7 @@ function renderCatalog(items) {
                 <span class="motif-format-badge">PDF • MusicXML</span>
             </div>
 
-            <!-- NEW THUMBNAIL IMAGE (Directly below header) -->
+            <!-- THUMBNAIL IMAGE (Placed directly below header) -->
             ${thumbnailHTML}
 
             <!-- CARD BODY & BADGES -->
@@ -679,7 +673,7 @@ async function renderSecureFirstPage(pdfUrl) {
 }
 
 /* ==========================================================
- * 8. AUTHENTIC AUDIO CONTROLLER
+ * 8. AUTHENTIC AUDIO CONTROLLER (SYNCHRONIZED PLAYBACK)
  * ========================================================== */
 
 const playBtn = document.getElementById('playAudioBtn');
@@ -712,10 +706,20 @@ function updateAudioStatusLabel() {
 
 async function toggleAudioPlayback() {
     const ctx = getAudioContext();
+
+    // CRITICAL: Resume Web Audio immediately during the user gesture click
+    if (ctx.state === 'suspended') {
+        try {
+            await ctx.resume();
+        } catch (e) {
+            console.warn('AudioContext resume note:', e);
+        }
+    }
+
     primeInstrument(activeInstrument);
 
     if (isPlaying) {
-        stopAudioPlayback();
+        stopAudioPlayback(true);
         return;
     }
 
@@ -726,11 +730,11 @@ async function toggleAudioPlayback() {
     const currentXmlFile = currentSong?.instruments?.[activeInstrument]?.musicxml;
     const currentMidiFile = currentSong?.instruments?.[activeInstrument]?.mid;
 
-    // 1. MUSICXML PLAYBACK (PRIMARY ENGINE)
+    // 1. MUSICXML / MXL PLAYBACK ENGINE
     if (currentXmlFile) {
         try {
             audioStatus.textContent = "Preparing Score Arrangement...";
-            const response = await fetch(currentXmlFile);
+            const response = await fetch(encodeURI(currentXmlFile));
             if (response.ok) {
                 const arrayBuffer = await response.arrayBuffer();
                 const xmlText = await extractMusicXMLText(arrayBuffer);
@@ -743,7 +747,7 @@ async function toggleAudioPlayback() {
 
                     const now = ctx.currentTime + 0.08;
                     playbackStartTime = now;
-                    currentTrackDuration = Math.min(parsedScore.duration || 30, 45);
+                    currentTrackDuration = Math.max(Math.min(parsedScore.duration || 30, 45), 5);
 
                     const timeSlotCounter = {};
 
@@ -758,15 +762,19 @@ async function toggleAudioPlayback() {
                             const volume = note.velocity * 0.95;
 
                             if (preset && soundFontPlayer) {
-                                soundFontPlayer.queueWaveTable(
-                                    ctx,
-                                    ctx.masterBus || ctx.destination,
-                                    preset,
-                                    when,
-                                    note.midi,
-                                    duration,
-                                    volume
-                                );
+                                try {
+                                    soundFontPlayer.queueWaveTable(
+                                        ctx,
+                                        ctx.masterBus || ctx.destination,
+                                        preset,
+                                        when,
+                                        note.midi,
+                                        duration,
+                                        volume
+                                    );
+                                } catch (err) {
+                                    playFallbackGuitarString(ctx, note.midi, when, duration, volume);
+                                }
                             } else if (isPlaying) {
                                 playFallbackGuitarString(ctx, note.midi, when, duration, volume);
                             }
@@ -778,18 +786,19 @@ async function toggleAudioPlayback() {
                 }
             }
         } catch (e) {
-            console.warn('MusicXML engine note:', e);
+            console.warn('[Tazaro Audio] MusicXML fallback to MIDI:', e);
         }
     }
 
-    // 2. BACKGROUND COMPANION PLAYBACK
-    if (currentMidiFile && window.Midi) {
+    // 2. MIDI COMPANION ENGINE
+    if (currentMidiFile && (window.Midi || window.Tone?.Midi)) {
         try {
             audioStatus.textContent = "Preparing Score Audio...";
-            const response = await fetch(currentMidiFile);
+            const response = await fetch(encodeURI(currentMidiFile));
             if (response.ok) {
                 const arrayBuffer = await response.arrayBuffer();
-                const midi = new Midi(arrayBuffer);
+                const MidiConstructor = window.Midi?.Midi || window.Midi || window.Tone?.Midi;
+                const midi = new MidiConstructor(arrayBuffer);
 
                 stopAudioPlayback(false);
                 isPlaying = true;
@@ -797,47 +806,55 @@ async function toggleAudioPlayback() {
 
                 const now = ctx.currentTime + 0.08;
                 playbackStartTime = now;
-                currentTrackDuration = Math.min(midi.duration || 30, 45);
+                currentTrackDuration = Math.max(Math.min(midi.duration || 30, 45), 5);
 
                 const timeSlotCounter = {};
 
-                midi.tracks.forEach(track => {
-                    track.notes.forEach(note => {
-                        if (note.time < 45) {
-                            const slotKey = Math.round(note.time * 20);
-                            timeSlotCounter[slotKey] = (timeSlotCounter[slotKey] || 0) + 1;
-                            if (timeSlotCounter[slotKey] > MAX_CONCURRENT_NOTES_PER_CHORD) return;
+                if (midi.tracks && midi.tracks.length > 0) {
+                    midi.tracks.forEach(track => {
+                        if (track.notes && track.notes.length > 0) {
+                            track.notes.forEach(note => {
+                                if (note.time < 45) {
+                                    const slotKey = Math.round(note.time * 20);
+                                    timeSlotCounter[slotKey] = (timeSlotCounter[slotKey] || 0) + 1;
+                                    if (timeSlotCounter[slotKey] > MAX_CONCURRENT_NOTES_PER_CHORD) return;
 
-                            const when = now + note.time;
-                            const duration = Math.max(note.duration, 0.4);
-                            const volume = (note.velocity || 0.8) * 0.95;
+                                    const when = now + note.time;
+                                    const duration = Math.max(note.duration || 0.4, 0.35);
+                                    const volume = (note.velocity || 0.8) * 0.95;
 
-                            if (preset && soundFontPlayer) {
-                                soundFontPlayer.queueWaveTable(
-                                    ctx,
-                                    ctx.masterBus || ctx.destination,
-                                    preset,
-                                    when,
-                                    note.midi,
-                                    duration,
-                                    volume
-                                );
-                            } else if (isPlaying) {
-                                playFallbackGuitarString(ctx, note.midi, when, duration, volume);
-                            }
+                                    if (preset && soundFontPlayer) {
+                                        try {
+                                            soundFontPlayer.queueWaveTable(
+                                                ctx,
+                                                ctx.masterBus || ctx.destination,
+                                                preset,
+                                                when,
+                                                note.midi,
+                                                duration,
+                                                volume
+                                            );
+                                        } catch (err) {
+                                            playFallbackGuitarString(ctx, note.midi, when, duration, volume);
+                                        }
+                                    } else if (isPlaying) {
+                                        playFallbackGuitarString(ctx, note.midi, when, duration, volume);
+                                    }
+                                }
+                            });
                         }
                     });
-                });
 
-                startProgressTracker();
-                return;
+                    startProgressTracker();
+                    return;
+                }
             }
         } catch (e) {
-            console.warn('Companion stream note:', e);
+            console.warn('[Tazaro Audio] MIDI fallback to demo:', e);
         }
     }
 
-    // 3. SOUND PROGRESSION DEMO FALLBACK
+    // 3. SYNTHESIZED SOUND PROGRESSION DEMO FALLBACK
     stopAudioPlayback(false);
     isPlaying = true;
     updateAudioStatusLabel();
@@ -878,15 +895,19 @@ async function toggleAudioPlayback() {
         const when = now + n.time;
 
         if (preset && soundFontPlayer) {
-            soundFontPlayer.queueWaveTable(
-                ctx,
-                ctx.masterBus || ctx.destination,
-                preset,
-                when,
-                n.midi,
-                n.dur,
-                n.vel
-            );
+            try {
+                soundFontPlayer.queueWaveTable(
+                    ctx,
+                    ctx.masterBus || ctx.destination,
+                    preset,
+                    when,
+                    n.midi,
+                    n.dur,
+                    n.vel
+                );
+            } catch (err) {
+                playFallbackGuitarString(ctx, n.midi, when, n.dur, n.vel);
+            }
         } else if (isPlaying) {
             playFallbackGuitarString(ctx, n.midi, when, n.dur, n.vel);
         }
@@ -907,7 +928,9 @@ function stopAudioPlayback(resetUI = true) {
     activeFallbackNodes = [];
 
     if (soundFontPlayer && audioCtx) {
-        soundFontPlayer.cancelQueue(audioCtx);
+        try {
+            soundFontPlayer.cancelQueue(audioCtx);
+        } catch (e) {}
     }
 
     if (resetUI) {
@@ -925,7 +948,7 @@ function startProgressTracker() {
     const updateTracker = () => {
         if (!isPlaying || !audioCtx) return;
         const elapsed = audioCtx.currentTime - playbackStartTime;
-        const progress = Math.min((elapsed / currentTrackDuration) * 100, 100);
+        const progress = Math.min(Math.max((elapsed / currentTrackDuration) * 100, 0), 100);
 
         audioProgress.style.width = `${progress}%`;
 
@@ -1136,7 +1159,7 @@ async function initiateStripeCheckout({ songSlug, title, bundleType, amountRM, p
             throw new Error(data.error || 'Failed to initialize Stripe checkout session.');
         }
 
-        // Redirect directly to Stripe Hosted Checkout
+        // Direct redirect to Stripe Checkout
         window.location.href = data.checkoutUrl;
 
     } catch (err) {
