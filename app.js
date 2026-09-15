@@ -15,7 +15,7 @@
  *              with Nylon backup (_tone_0240_JCLive_sf2_file) + Zero-Wait Pluck Fallback
  * 3. Master Limiter/Compressor Bus to prevent speaker clipping on dense chords
  * 4. Retina High-DPI Page-1 PDF Rendering Sandbox (PDF.js)
- * 5. Dynamic Cover Thumbnail Engine with Fallback Motif
+ * 5. Dynamic Cover Thumbnail Engine (Placed right after the header motif)
  * 6. Reactive Search & Category Chip Filter
  * 7. Stripe Hosted Checkout Engine (Cards, Apple Pay, Google Pay, GrabPay)
  * 8. Netlify Watermark DOM Killer
@@ -422,7 +422,7 @@ function processDiscoveredFiles(filePaths) {
             registry[slug] = {
                 slug: slug,
                 title: cleanTitle(slug),
-                thumbnail: null, // Holds cover image if found
+                thumbnail: null,
                 instruments: {
                     piano: { pdf: null, musicxml: null, mid: null, image: null },
                     guitar: { pdf: null, musicxml: null, mid: null, image: null }
@@ -439,7 +439,6 @@ function processDiscoveredFiles(filePaths) {
                 registry[slug].instruments[instrument].mid = path;
             } else if (['png', 'jpg', 'jpeg', 'webp'].includes(ext)) {
                 registry[slug].instruments[instrument].image = path;
-                // Assign first discovered image as card thumbnail
                 if (!registry[slug].thumbnail) {
                     registry[slug].thumbnail = path;
                 }
@@ -523,7 +522,7 @@ document.getElementById('resetFilterBtn').addEventListener('click', () => {
 });
 
 /* ==========================================================
- * 6. CATALOG GRID RENDERER (WITH DYNAMIC THUMBNAILS)
+ * 6. CATALOG GRID RENDERER
  * ========================================================== */
 
 function renderCatalog(items) {
@@ -573,8 +572,8 @@ function renderCatalog(items) {
             priceTagHTML = 'RM 5.00 Solo Edition';
         }
 
-        // Dedicated Cover Thumbnail or Fallback Art Motif
-        const mediaSectionHTML = song.thumbnail ? `
+        // New thumbnail image: rendered directly below the header box
+        const thumbnailHTML = song.thumbnail ? `
             <div class="card-thumbnail-box">
                 <img src="${song.thumbnail}" 
                      alt="${song.title}" 
@@ -582,34 +581,29 @@ function renderCatalog(items) {
                      loading="lazy" 
                      onerror="this.parentElement.style.display='none'">
             </div>
-        ` : `
-            <div class="card-art-motif">
-                <span class="motif-symbol">${hasPiano ? '𝄞' : '𝄢'}</span>
-                <span class="motif-format-badge">PDF • MusicXML</span>
-            </div>
-        `;
+        ` : '';
 
         const card = document.createElement('div');
         card.className = 'song-card';
         card.innerHTML = `
-            <!-- Card Header Section -->
-            <div class="card-header">
-                <div class="card-badges">
-                    ${badgeHTML}
-                </div>
-                <span class="motif-format-badge">Score</span>
+            <!-- HEADER SUB-CARD (Treble / Bass Clef & Format Badge Preserved) -->
+            <div class="card-art-motif">
+                <span class="motif-symbol">${hasPiano ? '𝄞' : '𝄢'}</span>
+                <span class="motif-format-badge">PDF • MusicXML</span>
             </div>
 
-            <!-- Thumbnail Image / Art Motif -->
-            ${mediaSectionHTML}
+            <!-- NEW THUMBNAIL IMAGE (Directly below header) -->
+            ${thumbnailHTML}
 
-            <!-- Card Body Section -->
-            <div class="card-body">
-                <h3>${song.title}</h3>
-                <p class="card-subtext">${subtextHTML}</p>
+            <!-- CARD BODY & BADGES -->
+            <div class="card-badges">
+                ${badgeHTML}
             </div>
 
-            <!-- Card Footer Section -->
+            <h3>${song.title}</h3>
+            <p class="card-subtext">${subtextHTML}</p>
+
+            <!-- CARD FOOTER -->
             <div class="card-footer">
                 <span class="price-pill">${priceTagHTML}</span>
                 <span class="action-link">Preview Score →</span>
