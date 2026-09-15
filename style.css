@@ -461,7 +461,6 @@ body {
     border-radius: 4px;
 }
 
-/* Badges for Available & Missing Instruments */
 .card-badges {
     display: flex;
     gap: 0.45rem;
@@ -975,6 +974,9 @@ body {
     background: var(--accent-gold);
 }
 
+/* ==========================================================
+   CHECKOUT PRICING & CUSTOMER INPUT BOX
+   ========================================================== */
 .checkout-selector h4 {
     font-size: 0.8rem;
     text-transform: uppercase;
@@ -1002,6 +1004,54 @@ body {
 .option-title { display: block; font-weight: 600; font-size: 0.92rem; }
 .option-desc { font-size: 0.72rem; color: var(--text-muted); }
 .option-price { font-family: var(--font-heading); font-size: 1.15rem; color: var(--accent-gold-light); }
+
+/* Modern Luxury Customer Input Fields */
+.customer-info-box {
+    margin: 1rem 0 0.5rem;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid var(--border-hairline);
+    border-radius: var(--radius-md);
+    padding: 0.9rem 1rem;
+}
+
+.customer-info-title {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent-gold);
+    font-weight: 700;
+    margin-bottom: 0.65rem;
+}
+
+.customer-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+
+.customer-fields input {
+    width: 100%;
+    background: #0B0E14;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-pure);
+    padding: 0.75rem 0.95rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-family: var(--font-sans);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.customer-fields input:focus {
+    outline: none;
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.15);
+}
+
+.customer-fields input::placeholder {
+    color: #64748B;
+    font-size: 0.8rem;
+}
 
 .checkout-btn {
     width: 100%;
@@ -1362,26 +1412,29 @@ body {
         font-size: 1.4rem;
     }
 
+    .customer-info-box {
+        margin: 0.85rem 0 0.4rem;
+        padding: 0.8rem;
+    }
+    .customer-fields input {
+        padding: 0.7rem 0.85rem;
+        font-size: 16px;
+    }
+
     .checkout-selector {
         margin-top: 0.75rem;
     }
     .checkout-btn {
-        position: fixed;
-        bottom: calc(10px + var(--sab));
-        left: 12px;
-        right: 12px;
-        width: calc(100% - 24px);
-        margin: 0;
-        z-index: 100;
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.85);
+        position: static;
+        width: 100%;
+        margin-top: 0.85rem;
         border-radius: var(--radius-md);
         padding: 1rem 1.25rem;
     }
     .secure-footer {
-        padding-bottom: 4rem;
+        padding-bottom: 2rem;
     }
 
-    /* Welcome Notice Mobile Adjustment */
     .welcome-overlay {
         padding: 1rem;
         align-items: center;
