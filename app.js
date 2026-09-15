@@ -2,6 +2,24 @@
  * =======================================================================
  * TAZARO MUSIC SHEET — CORE PLATFORM ENGINE
  * =======================================================================
+ * Features:
+ * 1. Strictly Forced MusicXML Score Arrangement Engine:
+ *    - Automated DTD Header Sanitizer to prevent XML parser entity failures.
+ *    - JSZip auto-unpacker for compressed .mxl / .musicxml packages.
+ *    - Independent Multi-Part Parallel Timeline Parsing (Left Hand & Right Hand
+ *      staves play synchronized together at t=0s).
+ *    - Case-insensitive, namespace-agnostic DOM extraction.
+ * 2. Authentic Dual Instrument Soundbanks:
+ *    - Piano: Real Yamaha/Steinway Concert Grand (_tone_0000_JCLive_sf2_file)
+ *    - Guitar: Real Steel-String Acoustic Guitar (_tone_0250_JCLive_sf2_file)
+ *              with Nylon backup (_tone_0240_JCLive_sf2_file) + Zero-Wait Pluck Fallback
+ * 3. Master Limiter/Compressor Bus to prevent speaker clipping on dense chords
+ * 4. Retina High-DPI Page-1 PDF Rendering Sandbox (PDF.js)
+ * 5. Dynamic Cover Thumbnail Engine with Fallback Motif
+ * 6. Reactive Search & Category Chip Filter
+ * 7. Stripe Hosted Checkout Engine (Cards, Apple Pay, Google Pay, GrabPay)
+ * 8. Netlify Watermark DOM Killer
+ * =======================================================================
  */
 
 // Initialize PDF.js Web Worker
@@ -404,9 +422,10 @@ function processDiscoveredFiles(filePaths) {
             registry[slug] = {
                 slug: slug,
                 title: cleanTitle(slug),
+                thumbnail: null, // Holds cover image if found
                 instruments: {
-                    piano: { pdf: null, musicxml: null, mid: null },
-                    guitar: { pdf: null, musicxml: null, mid: null }
+                    piano: { pdf: null, musicxml: null, mid: null, image: null },
+                    guitar: { pdf: null, musicxml: null, mid: null, image: null }
                 }
             };
         }
@@ -418,6 +437,12 @@ function processDiscoveredFiles(filePaths) {
                 registry[slug].instruments[instrument].musicxml = path;
             } else if (ext === 'mid' || ext === 'midi') {
                 registry[slug].instruments[instrument].mid = path;
+            } else if (['png', 'jpg', 'jpeg', 'webp'].includes(ext)) {
+                registry[slug].instruments[instrument].image = path;
+                // Assign first discovered image as card thumbnail
+                if (!registry[slug].thumbnail) {
+                    registry[slug].thumbnail = path;
+                }
             }
         }
     });
@@ -498,7 +523,7 @@ document.getElementById('resetFilterBtn').addEventListener('click', () => {
 });
 
 /* ==========================================================
- * 6. CATALOG GRID RENDERER
+ * 6. CATALOG GRID RENDERER (WITH DYNAMIC THUMBNAILS)
  * ========================================================== */
 
 function renderCatalog(items) {
@@ -548,21 +573,43 @@ function renderCatalog(items) {
             priceTagHTML = 'RM 5.00 Solo Edition';
         }
 
-        const card = document.createElement('div');
-        card.className = 'song-card';
-        card.innerHTML = `
+        // Dedicated Cover Thumbnail or Fallback Art Motif
+        const mediaSectionHTML = song.thumbnail ? `
+            <div class="card-thumbnail-box">
+                <img src="${song.thumbnail}" 
+                     alt="${song.title}" 
+                     class="card-thumbnail-img" 
+                     loading="lazy" 
+                     onerror="this.parentElement.style.display='none'">
+            </div>
+        ` : `
             <div class="card-art-motif">
                 <span class="motif-symbol">${hasPiano ? '𝄞' : '𝄢'}</span>
                 <span class="motif-format-badge">PDF • MusicXML</span>
             </div>
+        `;
 
-            <div class="card-badges">
-                ${badgeHTML}
+        const card = document.createElement('div');
+        card.className = 'song-card';
+        card.innerHTML = `
+            <!-- Card Header Section -->
+            <div class="card-header">
+                <div class="card-badges">
+                    ${badgeHTML}
+                </div>
+                <span class="motif-format-badge">Score</span>
             </div>
 
-            <h3>${song.title}</h3>
-            <p class="card-subtext">${subtextHTML}</p>
+            <!-- Thumbnail Image / Art Motif -->
+            ${mediaSectionHTML}
 
+            <!-- Card Body Section -->
+            <div class="card-body">
+                <h3>${song.title}</h3>
+                <p class="card-subtext">${subtextHTML}</p>
+            </div>
+
+            <!-- Card Footer Section -->
             <div class="card-footer">
                 <span class="price-pill">${priceTagHTML}</span>
                 <span class="action-link">Preview Score →</span>
@@ -685,7 +732,7 @@ async function toggleAudioPlayback() {
     const currentXmlFile = currentSong?.instruments?.[activeInstrument]?.musicxml;
     const currentMidiFile = currentSong?.instruments?.[activeInstrument]?.mid;
 
-    // 1. STRICTLY FORCE MUSICXML PLAYBACK (PRIMARY ENGINE)
+    // 1. MUSICXML PLAYBACK (PRIMARY ENGINE)
     if (currentXmlFile) {
         try {
             audioStatus.textContent = "Preparing Score Arrangement...";
