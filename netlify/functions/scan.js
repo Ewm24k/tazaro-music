@@ -4,7 +4,7 @@ const path = require('path');
 exports.handler = async function (event, context) {
     // Resolve path to the sheet folder
     const baseDir = path.resolve(__dirname, '../../sheet');
-    const allowedExtensions = ['.pdf', '.xml', '.musicxml', '.mid', '.midi'];
+    const allowedExtensions = ['.pdf', '.xml', '.musicxml', '.mxl', '.mid', '.midi'];
     const discoveredFiles = [];
     const instruments = ['piano', 'guitar'];
 
@@ -33,6 +33,7 @@ exports.handler = async function (event, context) {
     } catch (err) {
         return {
             statusCode: 500,
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ error: err.message })
         };
     }
