@@ -32,6 +32,7 @@ let searchQuery = '';
 let audioCtx = null;
 let soundFontPlayer = null;
 let acousticReverb = null;
+let masterCompressor = null;
 let isPlaying = false;
 let activeEnvelopes = [];
 let playbackTimer = null;
@@ -50,7 +51,7 @@ const instrumentsPreloaded = { piano: false, guitar: false };
 
 // Maximum simultaneous acoustic voices allowed in dense chords to preserve clarity
 // Lowered automatically on mobile to prevent the wavetable engine from being overloaded.
-const MAX_CONCURRENT_NOTES_PER_CHORD = isMobileDevice ? 7 : 12;
+const MAX_CONCURRENT_NOTES_PER_CHORD = isMobileDevice ? 5 : 12;
 
 // Exchange Rates & Currency State
 const baseExchangeRates = {
@@ -79,11 +80,33 @@ function getAudioContext() {
         soundFontPlayer = new WebAudioFontPlayer();
     }
 
-    // Live Concert Hall Reverberator (Gives deep, rich, authentic room resonance)
-    if (!acousticReverb && soundFontPlayer && audioCtx) {
+    // Gentle master limiter: keeps stacked concert-grand/guitar voices from clipping into
+    // distortion on phone speakers, which is heard as "choking"/crackling under load.
+    // This is pure gain-staging — it does not touch the instrument samples themselves.
+    if (!masterCompressor && audioCtx) {
+        try {
+            masterCompressor = audioCtx.createDynamicsCompressor();
+            masterCompressor.threshold.setValueAtTime(-22, audioCtx.currentTime);
+            masterCompressor.knee.setValueAtTime(18, audioCtx.currentTime);
+            masterCompressor.ratio.setValueAtTime(4, audioCtx.currentTime);
+            masterCompressor.attack.setValueAtTime(0.003, audioCtx.currentTime);
+            masterCompressor.release.setValueAtTime(0.18, audioCtx.currentTime);
+            masterCompressor.connect(audioCtx.destination);
+        } catch (e) {
+            masterCompressor = null;
+        }
+    }
+
+    // Live Concert Hall Reverberator (Gives deep, rich, authentic room resonance).
+    // Convolution reverb is CPU-heavy DSP — on weaker phone chips it can overrun the
+    // audio thread and cause the crackling/choking heard under load, so it's skipped
+    // on mobile devices. The piano/guitar samples themselves are completely unaffected;
+    // only the room-ambience effect is disabled on phones, and audio still runs through
+    // the limiter above for a clean, unclipped signal.
+    if (!acousticReverb && soundFontPlayer && audioCtx && !isMobileDevice) {
         try {
             acousticReverb = soundFontPlayer.createReverberator(audioCtx);
-            acousticReverb.output.connect(audioCtx.destination);
+            acousticReverb.output.connect(masterCompressor || audioCtx.destination);
         } catch (e) {
             acousticReverb = null;
         }
@@ -888,11 +911,11 @@ function startScorePlayback(notes, duration) {
         return;
     }
 
-    const audioDestination = acousticReverb ? acousticReverb.input : (ctx.masterBus || ctx.destination);
+    const audioDestination = acousticReverb ? acousticReverb.input : (masterCompressor || ctx.masterBus || ctx.destination);
     const timeSlotCounter = {};
 
     const notesInWindow = notes.filter(n => n.time < 45);
-    const BATCH_SIZE = isMobileDevice ? 16 : 32;
+    const BATCH_SIZE = isMobileDevice ? 8 : 32;
 
     const scheduleBatch = (startIndex) => {
         if (!isPlaying) return; // playback was stopped while batches were still pending
@@ -1375,3 +1398,20 @@ document.addEventListener('DOMContentLoaded', () => {
         preloadInstrumentSamples();
     } catch (e) {}
 });
+
+// Mobile browsers keep the AudioContext suspended until a real user gesture occurs.
+// Unlocking it on the very first tap/touch anywhere on the page (not just the Play
+// button) gives the decoder a head start, so by the time the user actually presses
+// Play, samples are already warm instead of racing to decode mid-playback.
+function unlockAudioOnFirstGesture() {
+    try {
+        const ctx = getAudioContext();
+        if (ctx.state === 'suspended') {
+            ctx.resume().catch(() => {});
+        }
+    } catch (e) {}
+    document.removeEventListener('touchstart', unlockAudioOnFirstGesture);
+    document.removeEventListener('click', unlockAudioOnFirstGesture);
+}
+document.addEventListener('touchstart', unlockAudioOnFirstGesture, { once: true, passive: true });
+document.addEventListener('click', unlockAudioOnFirstGesture, { once: true });
