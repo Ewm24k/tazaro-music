@@ -10,9 +10,10 @@
  *    - Concert Hall Acoustic Reverb: Authentic live stage resonance & sustain
  *    - Single-Voice Hardware Audio Clock: Zero double-piano / zero echo
  * 2. MusicXML (.mxl) & Master Timeline (.mid) Parser with Tied-Note Filtering
- * 3. Retina High-DPI Page-1 PDF Rendering (PDF.js)
- * 4. Catalog Grid with Clef Header Sub-Card & Fixed-Size Thumbnails
- * 5. Stripe Hosted Checkout Integration (Cards, Apple Pay, Google Pay, GrabPay)
+ * 3. Dynamic Global Currency Preview (Auto-detects USD, IDR, SGD, EUR, GBP, AUD)
+ * 4. Retina High-DPI Page-1 PDF Rendering (PDF.js)
+ * 5. Catalog Grid with Clef Header Sub-Card & Fixed-Size Thumbnails
+ * 6. Stripe Hosted Checkout Integration (Cards, Apple Pay, Google Pay, GrabPay)
  * =======================================================================
  */
 
@@ -39,6 +40,19 @@ let currentTrackDuration = 0;
 
 // Maximum simultaneous acoustic voices allowed in dense chords to preserve clarity
 const MAX_CONCURRENT_NOTES_PER_CHORD = 12;
+
+// Exchange Rates & Currency State
+const baseExchangeRates = {
+    MYR: 1.0,
+    USD: 0.23,       // RM 10.00 ≈ $2.30 USD
+    IDR: 3550,       // RM 10.00 ≈ Rp 35,500 IDR
+    SGD: 0.30,       // RM 10.00 ≈ S$ 3.00 SGD
+    EUR: 0.21,       // RM 10.00 ≈ €2.10 EUR
+    GBP: 0.18,       // RM 10.00 ≈ £1.80 GBP
+    AUD: 0.34        // RM 10.00 ≈ A$ 3.40 AUD
+};
+let liveExchangeRates = { ...baseExchangeRates };
+let activeCurrency = 'USD';
 
 /* ==========================================================
  * 1. REAL CONCERT ACOUSTIC SOUND ENGINE (ZERO OSCILLATORS)
@@ -816,7 +830,6 @@ function startScorePlayback(notes, duration) {
         return;
     }
 
-    // Connect to acoustic concert reverb or direct to master destination
     const audioDestination = acousticReverb ? acousticReverb.input : (ctx.masterBus || ctx.destination);
     const timeSlotCounter = {};
 
@@ -827,7 +840,6 @@ function startScorePlayback(notes, duration) {
             if (timeSlotCounter[slotKey] > MAX_CONCURRENT_NOTES_PER_CHORD) return;
 
             const when = now + note.time;
-            // Real acoustic decay: let the acoustic strings ring out naturally
             const naturalAcousticDuration = Math.max(note.duration || 0.8, 1.6);
             const volume = (note.velocity || 0.8) * 0.85;
 
@@ -947,7 +959,6 @@ function openPreviewModal(song) {
     updateModalView();
     modal.classList.add('active');
 
-    // Warm up the authentic instrument wave table
     primeInstrument(activeInstrument);
 }
 
@@ -978,6 +989,8 @@ function configurePricingOptions(song) {
         optPiano.click();
         dynamicPriceLabel.textContent = "RM 5.00";
     }
+
+    updateCurrencyPreview();
 }
 
 function updateModalView() {
@@ -1020,7 +1033,7 @@ modalCloseBtn.addEventListener('click', () => {
 });
 
 /* ==========================================================
- * 10. COMMERCE & STRIPE CHECKOUT GATEWAY DISPATCH
+ * 10. COMMERCE, CURRENCY CONVERTER & STRIPE CHECKOUT DISPATCH
  * ========================================================== */
 
 const priceOptions = document.querySelectorAll('.price-option');
@@ -1039,8 +1052,104 @@ priceOptions.forEach(opt => {
         selectedBundle = opt.getAttribute('data-bundle');
         selectedPrice = opt.getAttribute('data-price');
         dynamicPriceLabel.textContent = `RM ${parseFloat(selectedPrice).toFixed(2)}`;
+
+        updateCurrencyPreview();
     });
 });
+
+/**
+ * Intelligent Regional Currency Auto-Detection:
+ * Inspects browser timezone to select the most relevant local currency automatically.
+ */
+function detectUserCurrency() {
+    try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        if (tz.includes('Jakarta') || tz.includes('Pontianak') || tz.includes('Makassar') || tz.includes('Jayapura')) {
+            return 'IDR';
+        } else if (tz.includes('Singapore')) {
+            return 'SGD';
+        } else if (tz.includes('Kuala_Lumpur') || tz.includes('Kuching')) {
+            return 'MYR';
+        } else if (tz.includes('London')) {
+            return 'GBP';
+        } else if (tz.includes('Europe') || tz.includes('Paris') || tz.includes('Berlin') || tz.includes('Rome') || tz.includes('Madrid') || tz.includes('Amsterdam')) {
+            return 'EUR';
+        } else if (tz.includes('Australia') || tz.includes('Sydney') || tz.includes('Melbourne') || tz.includes('Brisbane') || tz.includes('Perth')) {
+            return 'AUD';
+        } else if (tz.includes('New_York') || tz.includes('Chicago') || tz.includes('Denver') || tz.includes('Los_Angeles') || tz.includes('America')) {
+            return 'USD';
+        }
+    } catch (e) {}
+    return 'USD';
+}
+
+function updateCurrencyPreview() {
+    const convertedLabel = document.getElementById('convertedPriceLabel');
+    const baseNotice = document.getElementById('baseCurrencyNotice');
+    if (!convertedLabel) return;
+
+    const amountInRM = parseFloat(selectedPrice) || 10.00;
+    if (baseNotice) baseNotice.textContent = `RM ${amountInRM.toFixed(2)}`;
+
+    const rate = liveExchangeRates[activeCurrency] || baseExchangeRates[activeCurrency] || 1.0;
+    const estimatedValue = amountInRM * rate;
+
+    let formattedString = '';
+    switch (activeCurrency) {
+        case 'IDR':
+            formattedString = `~Rp ${Math.round(estimatedValue).toLocaleString('id-ID')} IDR`;
+            break;
+        case 'USD':
+            formattedString = `~$${estimatedValue.toFixed(2)} USD`;
+            break;
+        case 'SGD':
+            formattedString = `~S$${estimatedValue.toFixed(2)} SGD`;
+            break;
+        case 'EUR':
+            formattedString = `~€${estimatedValue.toFixed(2)} EUR`;
+            break;
+        case 'GBP':
+            formattedString = `~£${estimatedValue.toFixed(2)} GBP`;
+            break;
+        case 'AUD':
+            formattedString = `~A$${estimatedValue.toFixed(2)} AUD`;
+            break;
+        case 'MYR':
+        default:
+            formattedString = `RM ${amountInRM.toFixed(2)} MYR`;
+            break;
+    }
+
+    convertedLabel.textContent = formattedString;
+}
+
+// Background rate synchronization (uses open exchange feed with graceful fallback)
+async function syncLiveExchangeRates() {
+    try {
+        const res = await fetch('https://open.er-api.com/v6/latest/MYR');
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.rates) {
+                ['USD', 'IDR', 'SGD', 'EUR', 'GBP', 'AUD'].forEach(curr => {
+                    if (data.rates[curr]) {
+                        liveExchangeRates[curr] = data.rates[curr];
+                    }
+                });
+                updateCurrencyPreview();
+            }
+        }
+    } catch (e) {}
+}
+
+const currencySelect = document.getElementById('currencySelect');
+if (currencySelect) {
+    activeCurrency = detectUserCurrency();
+    currencySelect.value = activeCurrency;
+    currencySelect.addEventListener('change', (e) => {
+        activeCurrency = e.target.value;
+        updateCurrencyPreview();
+    });
+}
 
 const checkoutBtn = document.getElementById('checkoutSubmit') || document.getElementById('toyyibpaySubmit');
 if (checkoutBtn) {
@@ -1176,4 +1285,10 @@ document.addEventListener('DOMContentLoaded', () => {
     initHeaderCarousel();
     initWelcomeAnnouncementModal();
     fetchDynamicInventory();
+    syncLiveExchangeRates();
+
+    // Warm up authentic soundfont on page load
+    try {
+        primeInstrument('piano');
+    } catch (e) {}
 });
