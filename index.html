@@ -247,11 +247,35 @@
                             </div>
                         </div>
 
+                        <!-- DYNAMIC INTERNATIONAL CURRENCY ESTIMATOR -->
+                        <div class="currency-converter-box" id="currencyConverterBox">
+                            <div class="converter-header">
+                                <span class="converter-label">
+                                    <span class="converter-globe">🌐</span>
+                                    <span>Currency Estimator</span>
+                                </span>
+                                <select id="currencySelect" class="currency-select" aria-label="Select Preview Currency">
+                                    <option value="USD">🇺🇸 USD ($)</option>
+                                    <option value="IDR">🇮🇩 IDR (Rp)</option>
+                                    <option value="SGD">🇸🇬 SGD (S$)</option>
+                                    <option value="EUR">🇪🇺 EUR (€)</option>
+                                    <option value="GBP">🇬🇧 GBP (£)</option>
+                                    <option value="AUD">🇦🇺 AUD (A$)</option>
+                                    <option value="MYR">🇲🇾 MYR (RM)</option>
+                                </select>
+                            </div>
+                            <div class="converter-result">
+                                <span class="converter-approx">Estimated in your currency:</span>
+                                <strong class="converter-value" id="convertedPriceLabel">~$2.30 USD</strong>
+                            </div>
+                            <p class="converter-note">Processed securely via Stripe as <span id="baseCurrencyNotice">RM 10.00</span>. Your card issuer auto-converts at standard bank rates with zero foreign transaction fees from Tazaro.</p>
+                        </div>
+
                         <button class="checkout-btn" id="checkoutSubmit">
                             <span>Proceed to Secure Checkout</span>
                             <strong id="dynamicPriceLabel">RM 10.00</strong>
                         </button>
-                        <p class="secure-footer">Secured via Stripe (Cards, Google Pay & GrabPay) • Instant Fulfillment</p>
+                        <p class="secure-footer">Secured via Stripe (Cards, Apple Pay, Google Pay & GrabPay) • Instant Digital Delivery</p>
                     </div>
 
                 </div>
