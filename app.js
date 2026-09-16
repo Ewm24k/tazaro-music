@@ -38,8 +38,25 @@ let playbackTimer = null;
 let playbackStartTime = 0;
 let currentTrackDuration = 0;
 
+// --- Audio Performance Optimization State (device-aware, no instrument/model changes) ---
+// Detects low-power / mobile hardware so voice count and scheduling can be tuned down,
+// which is what actually causes crackling, stutter, and dropped notes on phones.
+const isMobileDevice = /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
+let isTogglingAudio = false;                 // debounce guard against double-fire touch/click events
+let audioToggleCooldown = false;
+let schedulingBatchTimers = [];              // pending setTimeout ids from chunked note scheduling
+const instrumentsPreloaded = { piano: false, guitar: false };
+
 // Maximum simultaneous acoustic voices allowed in dense chords to preserve clarity
-const MAX_CONCURRENT_NOTES_PER_CHORD = 12;
+// Lowered automatically on mobile to prevent the wavetable engine from being overloaded.
+const MAX_CONCURRENT_NOTES_PER_CHORD = isMobileDevice ? 7 : 12;
+
+// Hard safety ceiling on total simultaneously-active acoustic voices across the whole
+// scheduled preview buffer. Without this, long/dense scores can pile up far more
+// simultaneous wavetable voices than any device's audio hardware can cleanly mix,
+// which is a common cause of crackling and audio-thread glitches.
+const MAX_TOTAL_ACTIVE_VOICES = isMobileDevice ? 24 : 48;
 
 // Exchange Rates & Currency State
 const baseExchangeRates = {
@@ -78,6 +95,11 @@ function getAudioContext() {
         }
     }
 
+    // Kick off background sample decoding as soon as the engine exists, so the first
+    // note played never has to wait on a mid-performance decodeAudioData() call —
+    // this is the main source of "laggy/buggy" first-note stutter, especially on phones.
+    preloadInstrumentSamples();
+
     return audioCtx;
 }
 
@@ -92,6 +114,36 @@ function getInstrumentPreset(type) {
         return window._tone_0000_JCLive_sf2_file || null;
     }
     return window._tone_0250_JCLive_sf2_file || window._tone_0240_JCLive_sf2_file || null;
+}
+
+/**
+ * Pre-decodes the concert grand piano and acoustic guitar sample banks ahead of time
+ * (instead of letting WebAudioFont decode them lazily, note-by-note, during playback).
+ * This is purely a performance optimization — the exact same real sampled instruments
+ * (_tone_0000_JCLive_sf2_file / _tone_0250_JCLive_sf2_file) are used, nothing about the
+ * sound model itself changes.
+ */
+function preloadInstrumentSamples() {
+    if (!soundFontPlayer || !audioCtx) return;
+
+    ['piano', 'guitar'].forEach(type => {
+        if (instrumentsPreloaded[type]) return;
+
+        const preset = getInstrumentPreset(type);
+        if (!preset) return;
+
+        try {
+            if (soundFontPlayer.loader && typeof soundFontPlayer.loader.decodeAfterLoading === 'function') {
+                const varName = type === 'piano'
+                    ? '_tone_0000_JCLive_sf2_file'
+                    : (window._tone_0250_JCLive_sf2_file ? '_tone_0250_JCLive_sf2_file' : '_tone_0240_JCLive_sf2_file');
+                soundFontPlayer.loader.decodeAfterLoading(audioCtx, varName);
+            }
+            instrumentsPreloaded[type] = true;
+        } catch (e) {
+            // Non-fatal — playback will simply fall back to on-demand decoding for this preset.
+        }
+    });
 }
 
 function primeInstrument(type) {
@@ -685,6 +737,12 @@ function updateAudioStatusLabel() {
 }
 
 async function toggleAudioPlayback() {
+    // Debounce: phones commonly fire both a touch event and a click event for a single tap,
+    // which used to double-trigger playback (stacked/overlapping audio = the "buggy" sound).
+    if (audioToggleCooldown) return;
+    audioToggleCooldown = true;
+    setTimeout(() => { audioToggleCooldown = false; }, 250);
+
     const ctx = getAudioContext();
 
     // Resume AudioContext inside the user gesture
@@ -812,6 +870,11 @@ async function toggleAudioPlayback() {
  * Pure Acoustic Hardware Clock Playback:
  * Sends notes directly into the Real Concert Grand / Real Guitar wavetable
  * through the Concert Hall acoustic reverberator. Zero synthetic oscillators.
+ *
+ * Optimization: notes are scheduled in small batches (spread across the event loop)
+ * instead of one long synchronous loop, and a hard total-voice ceiling is enforced,
+ * on top of the existing per-chord cap. Same instrument presets, same per-note
+ * volume/duration math — only the scheduling mechanics changed.
  */
 function startScorePlayback(notes, duration) {
     const ctx = getAudioContext();
@@ -832,12 +895,23 @@ function startScorePlayback(notes, duration) {
 
     const audioDestination = acousticReverb ? acousticReverb.input : (ctx.masterBus || ctx.destination);
     const timeSlotCounter = {};
+    let totalVoicesScheduled = 0;
 
-    notes.forEach(note => {
-        if (note.time < 45) {
+    const notesInWindow = notes.filter(n => n.time < 45);
+    const BATCH_SIZE = isMobileDevice ? 16 : 32;
+
+    const scheduleBatch = (startIndex) => {
+        if (!isPlaying) return; // playback was stopped while batches were still pending
+
+        const endIndex = Math.min(startIndex + BATCH_SIZE, notesInWindow.length);
+
+        for (let i = startIndex; i < endIndex; i++) {
+            const note = notesInWindow[i];
+
             const slotKey = Math.round(note.time * 20);
             timeSlotCounter[slotKey] = (timeSlotCounter[slotKey] || 0) + 1;
-            if (timeSlotCounter[slotKey] > MAX_CONCURRENT_NOTES_PER_CHORD) return;
+            if (timeSlotCounter[slotKey] > MAX_CONCURRENT_NOTES_PER_CHORD) continue;
+            if (totalVoicesScheduled >= MAX_TOTAL_ACTIVE_VOICES) continue;
 
             const when = now + note.time;
             const naturalAcousticDuration = Math.max(note.duration || 0.8, 1.6);
@@ -853,18 +927,33 @@ function startScorePlayback(notes, duration) {
                     naturalAcousticDuration,
                     volume
                 );
-                if (env) activeEnvelopes.push(env);
+                if (env) {
+                    activeEnvelopes.push(env);
+                    totalVoicesScheduled++;
+                }
             } catch (err) {
                 console.warn('[Audio Engine] Wavetable queue error:', err);
             }
         }
-    });
 
+        if (endIndex < notesInWindow.length) {
+            const timerId = setTimeout(() => scheduleBatch(endIndex), 0);
+            schedulingBatchTimers.push(timerId);
+        }
+    };
+
+    scheduleBatch(0);
     startProgressTracker();
 }
 
 function stopAudioPlayback(resetUI = true) {
     isPlaying = false;
+
+    // Cancel any note-scheduling batches still pending from startScorePlayback()
+    if (schedulingBatchTimers.length > 0) {
+        schedulingBatchTimers.forEach(id => clearTimeout(id));
+        schedulingBatchTimers = [];
+    }
 
     // Immediately cancel and release all scheduled acoustic audio envelopes
     if (activeEnvelopes && activeEnvelopes.length > 0) {
@@ -1287,8 +1376,10 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchDynamicInventory();
     syncLiveExchangeRates();
 
-    // Warm up authentic soundfont on page load
+    // Warm up authentic soundfont on page load and pre-decode both instrument sample
+    // banks in the background so the very first tap on Play never stutters.
     try {
         primeInstrument('piano');
+        preloadInstrumentSamples();
     } catch (e) {}
 });
