@@ -3,14 +3,15 @@
  * TAZARO MUSIC SHEET — CORE PLATFORM ENGINE
  * =======================================================================
  * Features:
- * 1. Single-Voice Real Instrument Sound Engine:
- *    - Strict Deduplication: Eliminates doubled piano / echo phasing
- *    - Hardware-Timed Web Audio Scheduling: Microsecond-precise note playback
+ * 1. 100% Authentic Sampled Acoustic Concert Sound Engine:
  *    - Piano: Real Yamaha/Steinway Concert Grand (_tone_0000_JCLive_sf2_file)
  *    - Guitar: Real Steel-String Acoustic Guitar (_tone_0250_JCLive_sf2_file)
- * 2. MusicXML & MIDI Parsers with Tied-Note Filtering
+ *    - Pure Acoustic Wavetable Only: Zero synthetic oscillators / zero beeps
+ *    - Concert Hall Acoustic Reverb: Authentic live stage resonance & sustain
+ *    - Single-Voice Hardware Audio Clock: Zero double-piano / zero echo
+ * 2. MusicXML (.mxl) & Master Timeline (.mid) Parser with Tied-Note Filtering
  * 3. Retina High-DPI Page-1 PDF Rendering (PDF.js)
- * 4. Catalog Grid with Header Motif & Fixed-Size Thumbnails
+ * 4. Catalog Grid with Clef Header Sub-Card & Fixed-Size Thumbnails
  * 5. Stripe Hosted Checkout Integration (Cards, Apple Pay, Google Pay, GrabPay)
  * =======================================================================
  */
@@ -26,37 +27,41 @@ let activeInstrument = 'piano';
 let activeFilter = 'all';
 let searchQuery = '';
 
-// WebAudioFont & Audio State
+// WebAudioFont & Acoustic Audio State
 let audioCtx = null;
 let soundFontPlayer = null;
+let acousticReverb = null;
 let isPlaying = false;
 let activeEnvelopes = [];
 let playbackTimer = null;
 let playbackStartTime = 0;
 let currentTrackDuration = 0;
 
-// Maximum simultaneous notes per chord window to protect mobile speakers
+// Maximum simultaneous acoustic voices allowed in dense chords to preserve clarity
 const MAX_CONCURRENT_NOTES_PER_CHORD = 12;
 
 /* ==========================================================
- * 1. REAL INSTRUMENT SOUND ENGINE RESOLVER
+ * 1. REAL CONCERT ACOUSTIC SOUND ENGINE (ZERO OSCILLATORS)
  * ========================================================== */
 
 function getAudioContext() {
     if (!audioCtx) {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         audioCtx = new AudioContextClass({ latencyHint: 'interactive' });
-
-        // Clean Master Gain Bus (Protects dynamic range without harsh pumping)
-        const masterGain = audioCtx.createGain();
-        masterGain.gain.setValueAtTime(0.75, audioCtx.currentTime);
-        masterGain.connect(audioCtx.destination);
-
-        audioCtx.masterBus = masterGain;
     }
 
     if (!soundFontPlayer && window.WebAudioFontPlayer) {
         soundFontPlayer = new WebAudioFontPlayer();
+    }
+
+    // Live Concert Hall Reverberator (Gives deep, rich, authentic room resonance)
+    if (!acousticReverb && soundFontPlayer && audioCtx) {
+        try {
+            acousticReverb = soundFontPlayer.createReverberator(audioCtx);
+            acousticReverb.output.connect(audioCtx.destination);
+        } catch (e) {
+            acousticReverb = null;
+        }
     }
 
     return audioCtx;
@@ -85,60 +90,6 @@ function primeInstrument(type) {
             }
         } catch (e) {}
     }
-}
-
-function playFallbackGuitarString(ctx, midiNote, when, duration, velocity = 0.8) {
-    try {
-        const freq = 440 * Math.pow(2, (midiNote - 69) / 12);
-        const outGain = ctx.createGain();
-        const filter = ctx.createBiquadFilter();
-
-        filter.type = 'lowpass';
-        filter.Q.setValueAtTime(2.2, when);
-        filter.frequency.setValueAtTime(4500, when);
-        filter.frequency.exponentialRampToValueAtTime(Math.min(freq * 3.5, 900), when + 0.12);
-
-        filter.connect(outGain);
-        outGain.connect(ctx.masterBus || ctx.destination);
-
-        const osc1 = ctx.createOscillator();
-        const osc2 = ctx.createOscillator();
-
-        osc1.type = 'triangle';
-        osc2.type = 'sawtooth';
-
-        osc1.frequency.setValueAtTime(freq, when);
-        osc2.frequency.setValueAtTime(freq, when);
-
-        const g1 = ctx.createGain();
-        const g2 = ctx.createGain();
-        g1.gain.setValueAtTime(0.7, when);
-        g2.gain.setValueAtTime(0.2, when);
-
-        osc1.connect(g1);
-        osc2.connect(g2);
-        g1.connect(filter);
-        g2.connect(filter);
-
-        const attack = 0.003;
-        const decay = Math.min(Math.max(duration, 0.7), 2.8);
-        const peak = Math.min(velocity * 0.45, 0.6);
-
-        outGain.gain.setValueAtTime(0.0001, when);
-        outGain.gain.linearRampToValueAtTime(peak, when + attack);
-        outGain.gain.exponentialRampToValueAtTime(0.0001, when + decay);
-
-        osc1.start(when);
-        osc2.start(when);
-        osc1.stop(when + decay);
-        osc2.stop(when + decay);
-
-        activeEnvelopes.push({
-            cancel: () => {
-                try { osc1.stop(); osc2.stop(); outGain.disconnect(); } catch (e) {}
-            }
-        });
-    } catch (err) {}
 }
 
 /* ==========================================================
@@ -239,7 +190,7 @@ function parseMusicXMLToNotes(rawXmlString) {
                     const isChord = el.getElementsByTagName('chord').length > 0;
                     const isGrace = el.getElementsByTagName('grace').length > 0;
 
-                    // FILTER OUT TIED NOTES: Do not re-strike a note that is tied from the previous measure/beat
+                    // FILTER OUT TIED NOTES: Do not re-strike a note tied from the previous measure
                     const tieEls = el.getElementsByTagName('tie');
                     let isTieStop = false;
                     for (let t of tieEls) {
@@ -274,13 +225,13 @@ function parseMusicXMLToNotes(rawXmlString) {
 
                             const midi = (octave + 1) * 12 + (stepOffsets[step] || 0) + alter;
                             const startTime = partTimeInSeconds + (noteStartDivision * secondsPerDivision);
-                            const durationSeconds = Math.max(noteDivisions * secondsPerDivision, 0.35);
+                            const durationSeconds = Math.max(noteDivisions * secondsPerDivision, 0.45);
 
                             parsedNotes.push({
                                 midi: midi,
                                 time: startTime,
                                 duration: durationSeconds,
-                                velocity: 0.82
+                                velocity: 0.85
                             });
                         }
                     }
@@ -308,7 +259,7 @@ function parseMusicXMLToNotes(rawXmlString) {
 
     parsedNotes.sort((a, b) => a.time - b.time);
 
-    // STRICT DEDUPLICATION: Prevent duplicate voice/part strikes at the exact same beat
+    // DEDUPLICATION: Prevents double-striking identical notes at the same timestamp
     const deduplicatedNotes = [];
     const seenNotes = new Set();
 
@@ -601,7 +552,7 @@ function renderCatalog(items) {
                 <span class="motif-format-badge">PDF • MusicXML</span>
             </div>
 
-            <!-- THUMBNAIL IMAGE (Directly below header) -->
+            <!-- THUMBNAIL IMAGE (Placed directly below header) -->
             ${thumbnailHTML}
 
             <!-- CARD BODY & BADGES -->
@@ -688,7 +639,7 @@ async function renderSecureFirstPage(pdfUrl) {
 }
 
 /* ==========================================================
- * 8. AUTHENTIC AUDIO CONTROLLER (SINGLE-VOICE HARDWARE CLOCK)
+ * 8. AUTHENTIC AUDIO CONTROLLER (REAL CONCERT INSTRUMENTS ONLY)
  * ========================================================== */
 
 const playBtn = document.getElementById('playAudioBtn');
@@ -745,7 +696,7 @@ async function toggleAudioPlayback() {
     // 1. MUSICXML / MXL ENGINE
     if (currentXmlFile) {
         try {
-            audioStatus.textContent = "Loading Score Arrangement...";
+            audioStatus.textContent = "Loading Concert Score...";
             const response = await fetch(encodeURI(currentXmlFile));
             if (response.ok) {
                 const arrayBuffer = await response.arrayBuffer();
@@ -765,7 +716,7 @@ async function toggleAudioPlayback() {
     // 2. MIDI COMPANION ENGINE
     if (currentMidiFile && (window.Midi || window.Tone?.Midi)) {
         try {
-            audioStatus.textContent = "Loading Score Audio...";
+            audioStatus.textContent = "Loading Concert Audio...";
             const response = await fetch(encodeURI(currentMidiFile));
             if (response.ok) {
                 const arrayBuffer = await response.arrayBuffer();
@@ -790,7 +741,7 @@ async function toggleAudioPlayback() {
 
                 rawNotes.sort((a, b) => a.time - b.time);
 
-                // STRICT MIDI DEDUPLICATION: Prevents merged track duplicate notes
+                // STRICT MIDI DEDUPLICATION: Prevents duplicate merged tracks
                 const deduplicatedNotes = [];
                 const seenNotes = new Set();
                 rawNotes.forEach(n => {
@@ -807,36 +758,36 @@ async function toggleAudioPlayback() {
                 }
             }
         } catch (e) {
-            console.warn('[Audio Engine] Falling back to progression demo:', e);
+            console.warn('[Audio Engine] MIDI fallback note:', e);
         }
     }
 
-    // 3. SOUND PROGRESSION DEMO FALLBACK
+    // 3. REAL SAMPLED SOUND PROGRESSION FALLBACK (Strictly Real Instruments)
     const demoNotes = activeInstrument === 'piano' ? [
-        { time: 0.0, midi: 60, duration: 1.5, velocity: 0.85 },
-        { time: 0.0, midi: 64, duration: 1.5, velocity: 0.8 },
-        { time: 0.0, midi: 67, duration: 1.5, velocity: 0.85 },
-        { time: 1.5, midi: 55, duration: 1.5, velocity: 0.8 },
-        { time: 1.5, midi: 59, duration: 1.5, velocity: 0.8 },
-        { time: 1.5, midi: 62, duration: 1.5, velocity: 0.85 },
-        { time: 3.0, midi: 57, duration: 1.5, velocity: 0.8 },
-        { time: 3.0, midi: 60, duration: 1.5, velocity: 0.8 },
-        { time: 3.0, midi: 64, duration: 1.5, velocity: 0.85 },
+        { time: 0.0, midi: 60, duration: 1.8, velocity: 0.85 },
+        { time: 0.0, midi: 64, duration: 1.8, velocity: 0.8 },
+        { time: 0.0, midi: 67, duration: 1.8, velocity: 0.85 },
+        { time: 1.5, midi: 55, duration: 1.8, velocity: 0.8 },
+        { time: 1.5, midi: 59, duration: 1.8, velocity: 0.8 },
+        { time: 1.5, midi: 62, duration: 1.8, velocity: 0.85 },
+        { time: 3.0, midi: 57, duration: 1.8, velocity: 0.8 },
+        { time: 3.0, midi: 60, duration: 1.8, velocity: 0.8 },
+        { time: 3.0, midi: 64, duration: 1.8, velocity: 0.85 },
         { time: 4.5, midi: 53, duration: 2.8, velocity: 0.9 },
         { time: 4.5, midi: 60, duration: 2.8, velocity: 0.85 },
         { time: 4.5, midi: 65, duration: 2.8, velocity: 0.9 }
     ] : [
-        { time: 0.0, midi: 52, duration: 1.2, velocity: 0.9 },
-        { time: 0.25, midi: 59, duration: 1.2, velocity: 0.85 },
-        { time: 0.5, midi: 64, duration: 1.2, velocity: 0.9 },
-        { time: 0.75, midi: 67, duration: 1.2, velocity: 0.85 },
-        { time: 1.5, midi: 50, duration: 1.2, velocity: 0.9 },
-        { time: 1.75, midi: 57, duration: 1.2, velocity: 0.85 },
-        { time: 2.0, midi: 62, duration: 1.2, velocity: 0.9 },
-        { time: 2.25, midi: 66, duration: 1.2, velocity: 0.85 },
-        { time: 3.0, midi: 48, duration: 1.2, velocity: 0.9 },
-        { time: 3.25, midi: 55, duration: 1.2, velocity: 0.85 },
-        { time: 3.5, midi: 60, duration: 1.2, velocity: 0.9 },
+        { time: 0.0, midi: 52, duration: 1.5, velocity: 0.9 },
+        { time: 0.25, midi: 59, duration: 1.5, velocity: 0.85 },
+        { time: 0.5, midi: 64, duration: 1.5, velocity: 0.9 },
+        { time: 0.75, midi: 67, duration: 1.5, velocity: 0.85 },
+        { time: 1.5, midi: 50, duration: 1.5, velocity: 0.9 },
+        { time: 1.75, midi: 57, duration: 1.5, velocity: 0.85 },
+        { time: 2.0, midi: 62, duration: 1.5, velocity: 0.9 },
+        { time: 2.25, midi: 66, duration: 1.5, velocity: 0.85 },
+        { time: 3.0, midi: 48, duration: 1.5, velocity: 0.9 },
+        { time: 3.25, midi: 55, duration: 1.5, velocity: 0.85 },
+        { time: 3.5, midi: 60, duration: 1.5, velocity: 0.9 },
         { time: 3.75, midi: 64, duration: 2.5, velocity: 0.95 }
     ];
 
@@ -844,9 +795,9 @@ async function toggleAudioPlayback() {
 }
 
 /**
- * Native Hardware Clock Scheduling:
- * Schedules directly into the Web Audio API hardware timeline.
- * Completely eliminates double piano, echo, and timing lag.
+ * Pure Acoustic Hardware Clock Playback:
+ * Sends notes directly into the Real Concert Grand / Real Guitar wavetable
+ * through the Concert Hall acoustic reverberator. Zero synthetic oscillators.
  */
 function startScorePlayback(notes, duration) {
     const ctx = getAudioContext();
@@ -855,11 +806,18 @@ function startScorePlayback(notes, duration) {
     isPlaying = true;
     updateAudioStatusLabel();
 
-    currentTrackDuration = Math.max(Math.min(duration || 30, 45), 5); // 45s preview limit
+    currentTrackDuration = Math.max(Math.min(duration || 30, 45), 5); // 45s preview
     const now = ctx.currentTime + 0.08;
     playbackStartTime = now;
 
     const preset = getInstrumentPreset(activeInstrument);
+    if (!preset || !soundFontPlayer) {
+        console.warn('[Audio Engine] Soundfont wavetable preset not ready yet.');
+        return;
+    }
+
+    // Connect to acoustic concert reverb or direct to master destination
+    const audioDestination = acousticReverb ? acousticReverb.input : (ctx.masterBus || ctx.destination);
     const timeSlotCounter = {};
 
     notes.forEach(note => {
@@ -869,26 +827,23 @@ function startScorePlayback(notes, duration) {
             if (timeSlotCounter[slotKey] > MAX_CONCURRENT_NOTES_PER_CHORD) return;
 
             const when = now + note.time;
-            const noteDuration = Math.min(Math.max(note.duration || 0.35, 0.25), 3.5);
-            const volume = (note.velocity || 0.8) * 0.72;
+            // Real acoustic decay: let the acoustic strings ring out naturally
+            const naturalAcousticDuration = Math.max(note.duration || 0.8, 1.6);
+            const volume = (note.velocity || 0.8) * 0.85;
 
-            if (preset && soundFontPlayer) {
-                try {
-                    const env = soundFontPlayer.queueWaveTable(
-                        ctx,
-                        ctx.masterBus || ctx.destination,
-                        preset,
-                        when,
-                        note.midi,
-                        noteDuration,
-                        volume
-                    );
-                    if (env) activeEnvelopes.push(env);
-                } catch (err) {
-                    playFallbackGuitarString(ctx, note.midi, when, noteDuration, volume);
-                }
-            } else if (isPlaying) {
-                playFallbackGuitarString(ctx, note.midi, when, noteDuration, volume);
+            try {
+                const env = soundFontPlayer.queueWaveTable(
+                    ctx,
+                    audioDestination,
+                    preset,
+                    when,
+                    note.midi,
+                    naturalAcousticDuration,
+                    volume
+                );
+                if (env) activeEnvelopes.push(env);
+            } catch (err) {
+                console.warn('[Audio Engine] Wavetable queue error:', err);
             }
         }
     });
@@ -899,7 +854,7 @@ function startScorePlayback(notes, duration) {
 function stopAudioPlayback(resetUI = true) {
     isPlaying = false;
 
-    // Immediately cancel and release all scheduled hardware audio envelopes
+    // Immediately cancel and release all scheduled acoustic audio envelopes
     if (activeEnvelopes && activeEnvelopes.length > 0) {
         activeEnvelopes.forEach(env => {
             try {
@@ -992,6 +947,7 @@ function openPreviewModal(song) {
     updateModalView();
     modal.classList.add('active');
 
+    // Warm up the authentic instrument wave table
     primeInstrument(activeInstrument);
 }
 
