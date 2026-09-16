@@ -52,12 +52,6 @@ const instrumentsPreloaded = { piano: false, guitar: false };
 // Lowered automatically on mobile to prevent the wavetable engine from being overloaded.
 const MAX_CONCURRENT_NOTES_PER_CHORD = isMobileDevice ? 7 : 12;
 
-// Hard safety ceiling on total simultaneously-active acoustic voices across the whole
-// scheduled preview buffer. Without this, long/dense scores can pile up far more
-// simultaneous wavetable voices than any device's audio hardware can cleanly mix,
-// which is a common cause of crackling and audio-thread glitches.
-const MAX_TOTAL_ACTIVE_VOICES = isMobileDevice ? 24 : 48;
-
 // Exchange Rates & Currency State
 const baseExchangeRates = {
     MYR: 1.0,
@@ -872,9 +866,10 @@ async function toggleAudioPlayback() {
  * through the Concert Hall acoustic reverberator. Zero synthetic oscillators.
  *
  * Optimization: notes are scheduled in small batches (spread across the event loop)
- * instead of one long synchronous loop, and a hard total-voice ceiling is enforced,
- * on top of the existing per-chord cap. Same instrument presets, same per-note
- * volume/duration math — only the scheduling mechanics changed.
+ * instead of one long synchronous loop, so scheduling hundreds of notes never blocks
+ * the main thread. The existing per-instant chord cap (timeSlotCounter) still limits
+ * how many voices can sound at the same moment. Same instrument presets, same
+ * per-note volume/duration math — only the scheduling mechanics changed.
  */
 function startScorePlayback(notes, duration) {
     const ctx = getAudioContext();
@@ -895,7 +890,6 @@ function startScorePlayback(notes, duration) {
 
     const audioDestination = acousticReverb ? acousticReverb.input : (ctx.masterBus || ctx.destination);
     const timeSlotCounter = {};
-    let totalVoicesScheduled = 0;
 
     const notesInWindow = notes.filter(n => n.time < 45);
     const BATCH_SIZE = isMobileDevice ? 16 : 32;
@@ -911,7 +905,6 @@ function startScorePlayback(notes, duration) {
             const slotKey = Math.round(note.time * 20);
             timeSlotCounter[slotKey] = (timeSlotCounter[slotKey] || 0) + 1;
             if (timeSlotCounter[slotKey] > MAX_CONCURRENT_NOTES_PER_CHORD) continue;
-            if (totalVoicesScheduled >= MAX_TOTAL_ACTIVE_VOICES) continue;
 
             const when = now + note.time;
             const naturalAcousticDuration = Math.max(note.duration || 0.8, 1.6);
@@ -929,7 +922,6 @@ function startScorePlayback(notes, duration) {
                 );
                 if (env) {
                     activeEnvelopes.push(env);
-                    totalVoicesScheduled++;
                 }
             } catch (err) {
                 console.warn('[Audio Engine] Wavetable queue error:', err);
